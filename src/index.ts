@@ -2,10 +2,12 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input"; // interactive input for login
 import { Api } from "telegram";
+import "dotenv/config"; // simplest way
+
 
 // Replace these with your values
-const apiId = 26767039;
-const apiHash = "5c9c82971de30b5e71030c27878b8115";
+const apiId = Number(process.env.API_ID);
+const apiHash = process.env.API_HASH as string;
 const stringSession = new StringSession(""); // empty = new login
 
 (async () => {
