@@ -23,7 +23,13 @@ const stringSession = new StringSession(""); // empty = new login
   });
 
   console.log("Logged in successfully!");
-  console.log("Your session string:", client.session.save()); // save for next time
+  if (process.env.PRINT_TG_SESSION === "1") {
+    console.log("Your session string:", client.session.save());
+  } else {
+    console.log(
+      "Session created. Set PRINT_TG_SESSION=1 to print it explicitly."
+    );
+  }
 
   // Example: fetch last 10 messages from a public channel
   const channel = "@garden_btc"; // replace with any public channel username
