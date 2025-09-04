@@ -2,12 +2,10 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input"; // interactive input for login
 import { Api } from "telegram";
-import { runRedisOperation } from './utils/redisUtils';
-import 'dotenv/config';
 
 // Replace these with your values
-const apiId = Number(process.env.API_ID);
-const apiHash = process.env.API_HASH as string;
+const apiId = 26767039;
+const apiHash = "5c9c82971de30b5e71030c27878b8115";
 const stringSession = new StringSession(""); // empty = new login
 
 (async () => {
@@ -52,14 +50,3 @@ const stringSession = new StringSession(""); // empty = new login
 
   await client.disconnect();
 })();
-
-
-async function main() {
-  await runRedisOperation(async (client) => {
-    await client.set('test-key', 'hello-redis');
-    const value = await client.get('test-key');
-    console.log('Read value from Redis:', value);
-  });
-}
-
-main();
