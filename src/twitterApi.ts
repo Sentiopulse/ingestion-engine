@@ -1,13 +1,51 @@
-// src/twitterApi.ts
 import dotenv from 'dotenv';
 dotenv.config();
 
-export async function fetchHomeTimeline() {
+// Build a Cookie header string from environment variables only.
+// Define mappings of env var -> cookie key. Only present, non-empty values are included.
+function buildCookieFromEnv(): string | undefined {
+  const mapping: Record<string, string> = {
+    COOKIE_D_PREFS: 'd_prefs',
+    COOKIE_CUID: '__cuid',
+    PERSONALIZATION_ID: 'personalization_id',
+    COOKIE_G_STATE: 'g_state',
+    KDT: 'kdt',
+    LANG: 'lang',
+    DNT: 'dnt',
+    AUTH_MULTI: 'auth_multi',
+    AUTH_TOKEN: 'auth_token',
+    GUEST_ID_ADS: 'guest_id_ads',
+    GUEST_ID_MARKETING: 'guest_id_marketing',
+    GUEST_ID: 'guest_id',
+    TWID: 'twid',
+    CT0: 'ct0',
+    EXTERNAL_REFERER: 'external_referer',
+    CF_BM: '__cf_bm'
+  };
+  const parts: string[] = [];
+  for (const [envName, cookieKey] of Object.entries(mapping)) {
+    const val = process.env[envName];
+    if (val && val.trim() !== '') {
+      // Quote values that contain special chars
+      const needsQuotes = /[;\s]/.test(val);
+      parts.push(`${cookieKey}=${needsQuotes ? '"' + val + '"' : val}`);
+    }
+  }
+  if (!parts.length) return undefined;
+  return parts.join('; ');
+}
+
+export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
   const url =
     "https://x.com/i/api/graphql/wEpbv0WrfwV6y2Wlf0fxBQ/HomeTimeline";
 
-  if (!process.env.BEARER || !process.env.CSRF_TOKEN || !process.env.AUTH_TOKEN) {
-    throw new Error('Missing required Twitter API tokens.');
+  const requiredTokens = ['BEARER', 'CSRF_TOKEN', 'AUTH_TOKEN'];
+  const missing = requiredTokens.filter(k => {
+    const val = process.env[k];
+    return typeof val === 'undefined' || val === '';
+  });
+  if (missing.length) {
+    throw new Error(`Missing required Twitter API tokens: ${missing.join(', ')}`);
   }
 
   const headers: Record<string, string> = {
@@ -17,27 +55,31 @@ export async function fetchHomeTimeline() {
     "accept-language": "en-US,en;q=0.7",
     "authorization": `Bearer ${process.env.BEARER}`,
     "content-type": "application/json",
-    "cookie":
-      `d_prefs=MjoxLGNvbnNlbnRfdmVyc2lvbjoyLHRleHRfdmVyc2lvbjoxMDAw; __cuid=c83a98bbbcc44d70b8ef8eb2c01985a5; personalization_id="v1_gGUlmPGLWEUBph5GFMAPtg=="; g_state={"i_l":0}; kdt=sckDK0NlgccWT3qd88hPomFPEEsaIgz9VDCmRxsp; lang=en; dnt=1; auth_multi="4847657575:910d912e26d3cc71419b47f8cdb61dbf28daa662"; auth_token=${process.env.AUTH_TOKEN}; guest_id_ads=v1%3A175688409511656837; guest_id_marketing=v1%3A175688409511656837; guest_id=v1%3A175688409511656837; twid=u%3D1946615847713447936; ct0=${process.env.CSRF_TOKEN}; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; __cf_bm=WKVrtWCBvGgZBSeVVeW6PYHjqm0zC3xzGV_57KbJbZw-1756913980-1.0.1.1-4lq3DM.brVhYh11c4fjYjgWYi6GIxI8QVlzzXA.3iSsqYNZOOjZEqqGkkmklw5Thwrj5298mGr6.mIlWYzfQGFMv4abC_F7PigGMkqWwJ.I`,
     "origin": "https://x.com",
     "referer": "https://x.com/home",
-    "sec-ch-ua":
-      `"Not;A=Brand";v="99", "Brave";v="139", "Chromium";v="139"`,
+    "sec-ch-ua": `"Not;A=Brand";v="99", "Brave";v="139", "Chromium";v="139"`,
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": `"Linux"`,
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-origin",
     "sec-gpc": "1",
-    "user-agent":
-      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-    "x-client-transaction-id":
-      "P8GWBZGM4Kef5cgpMWTtIf/CNWsl6pOUss42/MbziQsBKa30tYZlAl5P1vVMgQtXHSTBVzsRsWk+9zGyBiffgh4nOo32PA",
+    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
     "x-csrf-token": `${process.env.CSRF_TOKEN}`,
     "x-twitter-active-user": "yes",
     "x-twitter-auth-type": "OAuth2Session",
     "x-twitter-client-language": "en",
   };
+
+  const dynamicCookie = buildCookieFromEnv();
+  if (dynamicCookie) {
+    headers.cookie = dynamicCookie;
+  }
+
+  // Normalize seenTweetIds to an array of non-empty strings
+  const normalizedSeen = Array.isArray(seenTweetIds)
+    ? seenTweetIds.filter(id => typeof id === 'string' && id.trim() !== '').map(id => id.trim())
+    : [];
 
   const body = {
     variables: {
@@ -46,12 +88,7 @@ export async function fetchHomeTimeline() {
       latestControlAvailable: true,
       requestContext: "launch",
       withCommunity: true,
-      seenTweetIds: [
-        "1963059240672928159",
-        "1963081007193628913",
-        "1963092350101815329",
-        "1963033035567243480",
-      ],
+      seenTweetIds: normalizedSeen,
     },
     features: {
       rweb_video_screen_enabled: false,
@@ -94,15 +131,48 @@ export async function fetchHomeTimeline() {
     queryId: "wEpbv0WrfwV6y2Wlf0fxBQ",
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const timeoutMs = Number(process.env.TWITTER_REQUEST_TIMEOUT_MS || 10000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error(`Twitter request timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     throw new Error(`Request failed with status ${res.status}`);
   }
 
-  return res.json();
+  let json: any;
+  try {
+    json = await res.json();
+  } catch (e) {
+    throw new Error(`Failed to parse JSON response: ${(e as Error).message}`);
+  }
+
+  if (json && Array.isArray(json.errors) && json.errors.length) {
+    const context = {
+      queryId: body.queryId,
+      variablesSummary: {
+        count: body.variables.count,
+        seenTweetIdsLength: body.variables.seenTweetIds?.length || 0
+      }
+    };
+    throw new Error(`Twitter GraphQL errors: ${JSON.stringify(json.errors)} | context=${JSON.stringify(context)}`);
+  }
+
+  // Prefer returning the data field if present, else the whole JSON.
+  return Object.prototype.hasOwnProperty.call(json, 'data') ? json.data : json;
 }
