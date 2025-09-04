@@ -24,11 +24,17 @@ function buildCookieFromEnv(): string | undefined {
   };
   const parts: string[] = [];
   for (const [envName, cookieKey] of Object.entries(mapping)) {
-    const val = process.env[envName];
-    if (val && val.trim() !== '') {
-      // Quote values that contain special chars
-      const needsQuotes = /[;\s]/.test(val);
-      parts.push(`${cookieKey}=${needsQuotes ? '"' + val + '"' : val}`);
+    let val = process.env[envName];
+    if (typeof val === 'string') val = val.trim();
+    // Skip if empty or contains CR, LF, or semicolon
+    if (!val || /[\r\n;]/.test(val)) continue;
+    parts.push(`${cookieKey}=${val}`);
+  }
+  // If CT0 is missing, but CSRF_TOKEN is present and valid, add ct0
+  if (!process.env.CT0 && process.env.CSRF_TOKEN) {
+    const csrf = process.env.CSRF_TOKEN.trim();
+    if (csrf && !/[\r\n;]/.test(csrf)) {
+      parts.push(`ct0=${csrf}`);
     }
   }
   if (!parts.length) return undefined;
@@ -131,7 +137,8 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
     queryId: "wEpbv0WrfwV6y2Wlf0fxBQ",
   };
 
-  const timeoutMs = Number(process.env.TWITTER_REQUEST_TIMEOUT_MS || 10000);
+  let timeoutMs = parseInt(process.env.TWITTER_REQUEST_TIMEOUT_MS ?? '', 10);
+  if (isNaN(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
