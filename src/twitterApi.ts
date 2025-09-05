@@ -1,92 +1,27 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Build a Cookie header string from environment variables only.
-// Define mappings of env var -> cookie key. Only present, non-empty values are included.
-function buildCookieFromEnv(): string | undefined {
-  const mapping: Record<string, string> = {
-    COOKIE_D_PREFS: 'd_prefs',
-    COOKIE_CUID: '__cuid',
-    PERSONALIZATION_ID: 'personalization_id',
-    COOKIE_G_STATE: 'g_state',
-    KDT: 'kdt',
-    LANG: 'lang',
-    DNT: 'dnt',
-    AUTH_MULTI: 'auth_multi',
-    AUTH_TOKEN: 'auth_token',
-    GUEST_ID_ADS: 'guest_id_ads',
-    GUEST_ID_MARKETING: 'guest_id_marketing',
-    GUEST_ID: 'guest_id',
-    TWID: 'twid',
-    CT0: 'ct0',
-    EXTERNAL_REFERER: 'external_referer',
-    CF_BM: '__cf_bm'
-  };
-  const parts: string[] = [];
-  for (const [envName, cookieKey] of Object.entries(mapping)) {
-    let val = process.env[envName];
-    if (typeof val === 'string') val = val.trim();
-    // Skip if empty or contains CR, LF, or semicolon
-    if (!val || /[\r\n;]/.test(val)) continue;
-    parts.push(`${cookieKey}=${val}`);
-  }
-  // If CT0 is missing, but CSRF_TOKEN is present and valid, add ct0
-  if (!process.env.CT0 && process.env.CSRF_TOKEN) {
-    const csrf = process.env.CSRF_TOKEN.trim();
-    if (csrf && !/[\r\n;]/.test(csrf)) {
-      parts.push(`ct0=${csrf}`);
-    }
-  }
-  if (!parts.length) return undefined;
-  return parts.join('; ');
-}
-
 export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
-  const url =
-    "https://x.com/i/api/graphql/wEpbv0WrfwV6y2Wlf0fxBQ/HomeTimeline";
+  const url = "https://x.com/i/api/graphql/wEpbv0WrfwV6y2Wlf0fxBQ/HomeTimeline";
 
+  // Check required environment variables
   const requiredTokens = ['BEARER', 'CSRF_TOKEN', 'AUTH_TOKEN'];
-  const missing = requiredTokens.filter(k => {
-    const val = process.env[k];
-    return typeof val === 'undefined' || val === '';
-  });
+  const missing = requiredTokens.filter(k => !process.env[k]);
   if (missing.length) {
-    throw new Error(`Missing required Twitter API tokens: ${missing.join(', ')}`);
+    throw new Error(`Missing required tokens: ${missing.join(', ')}`);
   }
 
-  const headers: Record<string, string> = {
-    "authority": "x.com",
-    "accept": "*/*",
-    "accept-encoding": "gzip, deflate, br, zstd",
-    "accept-language": "en-US,en;q=0.7",
+  // Setup headers with cookies
+  const cookie = `auth_token=${process.env.AUTH_TOKEN};csrf_token=${process.env.CSRF_TOKEN};ct0=${process.env.CSRF_TOKEN}`;
+  
+  const headers = {
     "authorization": `Bearer ${process.env.BEARER}`,
     "content-type": "application/json",
-    "origin": "https://x.com",
-    "referer": "https://x.com/home",
-    "sec-ch-ua": `"Not;A=Brand";v="99", "Brave";v="139", "Chromium";v="139"`,
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": `"Linux"`,
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-origin",
-    "sec-gpc": "1",
-    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
     "x-csrf-token": `${process.env.CSRF_TOKEN}`,
-    "x-twitter-active-user": "yes",
-    "x-twitter-auth-type": "OAuth2Session",
-    "x-twitter-client-language": "en",
+    "cookie": cookie,
   };
 
-  const dynamicCookie = buildCookieFromEnv();
-  if (dynamicCookie) {
-    headers.cookie = dynamicCookie;
-  }
-
-  // Normalize seenTweetIds to an array of non-empty strings
-  const normalizedSeen = Array.isArray(seenTweetIds)
-    ? seenTweetIds.filter(id => typeof id === 'string' && id.trim() !== '').map(id => id.trim())
-    : [];
-
+  // Prepare request body
   const body = {
     variables: {
       count: 20,
@@ -94,7 +29,7 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
       latestControlAvailable: true,
       requestContext: "launch",
       withCommunity: true,
-      seenTweetIds: normalizedSeen,
+      seenTweetIds: seenTweetIds || [],
     },
     features: {
       rweb_video_screen_enabled: false,
@@ -125,8 +60,7 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
       creator_subscriptions_quote_tweet_preview_enabled: false,
       freedom_of_speech_not_reach_fetch_enabled: true,
       standardized_nudges_misinfo: true,
-      tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled:
-        true,
+      tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
       longform_notetweets_rich_text_read_enabled: true,
       longform_notetweets_inline_media_enabled: true,
       responsive_web_grok_image_annotation_enabled: true,
@@ -137,49 +71,70 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
     queryId: "wEpbv0WrfwV6y2Wlf0fxBQ",
   };
 
-  let timeoutMs = parseInt(process.env.TWITTER_REQUEST_TIMEOUT_MS ?? '', 10);
-  if (isNaN(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } catch (err: any) {
-    if (err.name === 'AbortError') {
-      throw new Error(`Twitter request timed out after ${timeoutMs}ms`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeout);
+  // Make API request
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  // Check response status
+  if (!response.ok) {
+    throw new Error(`Twitter API request failed: ${response.status} ${response.statusText}`);
   }
 
-  if (!res.ok) {
-    throw new Error(`Request failed with status ${res.status}`);
+  // Parse JSON response
+  const data = await response.json();
+
+  // Check for GraphQL errors
+  if (data.errors && data.errors.length > 0) {
+    throw new Error(`Twitter API errors: ${JSON.stringify(data.errors)}`);
   }
 
-  let json: any;
-  try {
-    json = await res.json();
-  } catch (e) {
-    throw new Error(`Failed to parse JSON response: ${(e as Error).message}`);
-  }
+  // Return timeline data
+  return data.data || data;
+}
 
-  if (json && Array.isArray(json.errors) && json.errors.length) {
-    const context = {
-      queryId: body.queryId,
-      variablesSummary: {
-        count: body.variables.count,
-        seenTweetIdsLength: body.variables.seenTweetIds?.length || 0
+// Test runner - when file is executed directly
+if (require.main === module) {
+  console.log('Starting fetchHomeTimeline...');
+  (async () => {
+    try {
+      const data = await fetchHomeTimeline();
+      
+      console.log('\n=== TWITTER API RESPONSE ===');
+      console.log('Response Type:', typeof data);
+      console.log('Response Keys:', Object.keys(data || {}));
+      
+      // Show JSON response (truncated for readability)
+      const jsonString = JSON.stringify(data, null, 2);
+      if (jsonString.length > 3000) {
+        console.log('\nResponse (truncated):');
+        console.log(jsonString.slice(0, 3000) + '\n...\n[Total length: ' + jsonString.length + ' characters]');
+      } else {
+        console.log('\nFull Response:');
+        console.log(jsonString);
       }
-    };
-    throw new Error(`Twitter GraphQL errors: ${JSON.stringify(json.errors)} | context=${JSON.stringify(context)}`);
-  }
-
-  // Prefer returning the data field if present, else the whole JSON.
-  return Object.prototype.hasOwnProperty.call(json, 'data') ? json.data : json;
+      
+      // Count tweets and show summary
+      if (data?.home?.home_timeline_urt?.instructions) {
+        const instructions = data.home.home_timeline_urt.instructions;
+        let tweetCount = 0;
+        instructions.forEach((instruction: any) => {
+          if (instruction.entries) {
+            tweetCount += instruction.entries.filter((entry: any) => 
+              entry.entryId && entry.entryId.startsWith('tweet-')
+            ).length;
+          }
+        });
+        console.log('\n=== SUMMARY ===');
+        console.log('Instructions count:', instructions.length);
+        console.log('Tweets found:', tweetCount);
+      }
+      
+    } catch (err) {
+      console.error('fetchHomeTimeline failed:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  })();
 }
