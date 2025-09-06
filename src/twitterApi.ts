@@ -2,7 +2,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
-  const url = "https://x.com/i/api/graphql/wEpbv0WrfwV6y2Wlf0fxBQ/HomeTimeline";
+  const queryId = "wEpbv0WrfwV6y2Wlf0fxBQ";
+  const url = `https://x.com/i/api/graphql/${queryId}/HomeTimeline`;
 
   // Check required environment variables
   const requiredTokens = ['BEARER', 'CSRF_TOKEN', 'AUTH_TOKEN'];
@@ -12,8 +13,8 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
   }
 
   // Setup headers with cookies
-  const cookie = `auth_token=${process.env.AUTH_TOKEN};csrf_token=${process.env.CSRF_TOKEN};ct0=${process.env.CSRF_TOKEN}`;
-  
+  const cookie = `auth_token=${process.env.AUTH_TOKEN};ct0=${process.env.CSRF_TOKEN}`;
+
   const headers = {
     "authorization": `Bearer ${process.env.BEARER}`,
     "content-type": "application/json",
@@ -68,7 +69,7 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
       responsive_web_grok_community_note_auto_translation_is_enabled: false,
       responsive_web_enhance_cards_enabled: false,
     },
-    queryId: "wEpbv0WrfwV6y2Wlf0fxBQ",
+    queryId,
   };
 
   // Make API request
@@ -96,45 +97,19 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
 }
 
 // Test runner - when file is executed directly
-if (require.main === module) {
+async function main() {
   console.log('Starting fetchHomeTimeline...');
-  (async () => {
-    try {
-      const data = await fetchHomeTimeline();
-      
-      console.log('\n=== TWITTER API RESPONSE ===');
-      console.log('Response Type:', typeof data);
-      console.log('Response Keys:', Object.keys(data || {}));
-      
-      // Show JSON response (truncated for readability)
-      const jsonString = JSON.stringify(data, null, 2);
-      if (jsonString.length > 3000) {
-        console.log('\nResponse (truncated):');
-        console.log(jsonString.slice(0, 3000) + '\n...\n[Total length: ' + jsonString.length + ' characters]');
-      } else {
-        console.log('\nFull Response:');
-        console.log(jsonString);
-      }
-      
-      // Count tweets and show summary
-      if (data?.home?.home_timeline_urt?.instructions) {
-        const instructions = data.home.home_timeline_urt.instructions;
-        let tweetCount = 0;
-        instructions.forEach((instruction: any) => {
-          if (instruction.entries) {
-            tweetCount += instruction.entries.filter((entry: any) => 
-              entry.entryId && entry.entryId.startsWith('tweet-')
-            ).length;
-          }
-        });
-        console.log('\n=== SUMMARY ===');
-        console.log('Instructions count:', instructions.length);
-        console.log('Tweets found:', tweetCount);
-      }
-      
-    } catch (err) {
-      console.error('fetchHomeTimeline failed:', err instanceof Error ? err.message : err);
-      process.exit(1);
-    }
-  })();
+  try {
+    const data = await fetchHomeTimeline();
+
+    // Show JSON response (truncated for readability)
+    const jsonString = JSON.stringify(data, null, 2);
+
+    console.log(jsonString);
+  } catch (err) {
+    console.error('fetchHomeTimeline failed:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
 }
+main();
+
