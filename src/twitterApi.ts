@@ -1,4 +1,4 @@
-
+import cron from 'node-cron';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -142,5 +142,19 @@ async function main() {
     process.exit(1);
   }
 }
+
+// Run once at startup
 main();
+
+// Schedule to run every 5 minutes
+cron.schedule('*/5 * * * *', async () => {
+  console.log('Refetching Twitter timeline...');
+  try {
+    const timeline = await fetchHomeTimeline();
+    // Process the timeline data here (save to DB, send to another service, etc.)
+    console.log('Fetched timeline:', timeline);
+  } catch (err) {
+    console.error('Scheduled Twitter timeline fetch failed:', err);
+  }
+});
 

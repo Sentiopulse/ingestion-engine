@@ -1,18 +1,24 @@
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input"; // interactive input for login
-import { Api } from "telegram";
+import cron from 'node-cron';
 import { runRedisOperation } from './utils/redisUtils';
+import { fetchTelegramMessages } from './fetchTelegramMessages';
 import 'dotenv/config';
 
 // Replace these with your values
 const apiId = Number(process.env.API_ID);
-const apiHash = process.env.API_HASH as string;
-const stringSession = new StringSession(""); // empty = new login
+const apiHash = process.env.API_HASH ?? "";
+if (!Number.isFinite(apiId)) {
+  throw new Error("API_ID environment variable is missing or not a valid number.");
+}
+if (!apiHash) {
+  throw new Error("API_HASH environment variable is not set.");
+}
+const stringSession = new StringSession(process.env.TG_SESSION ?? ""); // use existing session if available
 
-(async () => {
+async function startTelegramCron() {
   console.log("Starting Telegram client...");
-
   const client = new TelegramClient(stringSession, apiId, apiHash, {
     connectionRetries: 5,
   });
@@ -33,25 +39,29 @@ const stringSession = new StringSession(""); // empty = new login
     );
   }
 
-  // Example: fetch last 10 messages from a public channel
-  const channel = "@garden_btc"; // replace with any public channel username
-  const messages = await client.invoke(
-    new Api.messages.GetHistory({
-      peer: channel,
-      limit: 10,
-    })
-  );
-
-  if ("messages" in messages) {
-    messages.messages.forEach((msg: any) => {
-      console.log(msg.id, msg.message, msg.date);
-    });
-  } else {
-    console.log("No messages property found in response:", messages);
+  // Run once at startup
+  try {
+    await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
+  } catch (err) {
+    console.error("Startup Telegram fetch failed:", err);
   }
 
-  await client.disconnect();
-})();
+  // Schedule to run every 5 minutes (no overlap guard)
+  cron.schedule('*/5 * * * *', async () => {
+    console.log('Refetching Telegram messages...');
+    try {
+      await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
+    } catch (err) {
+      console.error('Scheduled Telegram fetch failed:', err);
+    }
+  });
+
+  // Keep process alive
+}
+
+startTelegramCron().catch((err) => {
+  console.error("Failed to start Telegram cron:", err);
+});
 
 
 async function main() {
@@ -63,3 +73,5 @@ async function main() {
 }
 
 main();
+
+
