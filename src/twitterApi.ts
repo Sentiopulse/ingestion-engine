@@ -1,7 +1,8 @@
+
 import dotenv from 'dotenv';
 dotenv.config();
 
-export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
+export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Array<{ id: string; content: string; authorId: string }>> {
   const queryId = "wEpbv0WrfwV6y2Wlf0fxBQ";
   const url = `https://x.com/i/api/graphql/${queryId}/HomeTimeline`;
 
@@ -92,8 +93,38 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
     throw new Error(`Twitter API errors: ${JSON.stringify(data.errors)}`);
   }
 
-  // Return timeline data
-  return data.data || data;
+  // Format and return tweets as [{ content, id }]
+  const timeline = data.data || data;
+  const tweets: Array<{ content: string, id: string, authorId: string }> = [];
+  const seenTweetIdsSet = new Set(seenTweetIds);
+
+  try {
+    // Twitter's actual GraphQL HomeTimeline response structure
+    const instructions = timeline?.home?.home_timeline_urt?.instructions || [];
+
+    for (const instruction of instructions) {
+      const entries = instruction?.entries ?? (instruction?.entry ? [instruction.entry] : []);
+      for (const entry of entries) {
+        const item = entry?.content?.itemContent;
+        if (!item || item.promotedMetadata) continue; // exclude ads
+        const result = item.tweet_results?.result;
+        const base = result?.__typename === 'TweetWithVisibilityResults' ? result?.tweet : result;
+        const restId: string | undefined = base?.rest_id;
+        const fullText: string | undefined =
+          base?.legacy?.full_text ??
+          base?.note_tweet?.note_tweet_results?.result?.text;
+        const authorId: string | undefined = base?.core?.user_results?.result?.rest_id;
+        if (!restId || !fullText || !authorId) continue;
+        if (seenTweetIdsSet.has(restId)) continue;
+        tweets.push({ id: restId, content: fullText, authorId });
+        seenTweetIdsSet.add(restId);
+      }
+    }
+  } catch (e) {
+    console.error("Error parsing tweets:", e);
+  }
+
+  return tweets;
 }
 
 // Test runner - when file is executed directly
