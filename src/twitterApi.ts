@@ -2,7 +2,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Array<{ id: string; content: string }>> {
+export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Array<{ id: string; content: string; authorId: string }>> {
   const queryId = "wEpbv0WrfwV6y2Wlf0fxBQ";
   const url = `https://x.com/i/api/graphql/${queryId}/HomeTimeline`;
 
@@ -95,7 +95,7 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Ar
 
   // Format and return tweets as [{ content, id }]
   const timeline = data.data || data;
-  const tweets: Array<{ content: string, id: string }> = [];
+  const tweets: Array<{ content: string, id: string, authorId: string }> = [];
   const seen = new Set<string>();
   const seenInput = new Set(seenTweetIds);
 
@@ -114,9 +114,10 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Ar
         const fullText: string | undefined =
           base?.legacy?.full_text ??
           base?.note_tweet?.note_tweet_results?.result?.text;
-        if (!restId || !fullText) continue;
+        const authorId: string | undefined = base?.core?.user_results?.result?.rest_id;
+        if (!restId || !fullText || !authorId) continue;
         if (seenInput.has(restId) || seen.has(restId)) continue;
-        tweets.push({ id: restId, content: fullText });
+        tweets.push({ id: restId, content: fullText, authorId });
         seen.add(restId);
       }
     }
