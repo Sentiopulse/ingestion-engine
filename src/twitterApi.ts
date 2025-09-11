@@ -92,8 +92,32 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
     throw new Error(`Twitter API errors: ${JSON.stringify(data.errors)}`);
   }
 
-  // Return timeline data
-  return data.data || data;
+  // Format and return tweets as [{ content, id }]
+  const timeline = data.data || data;
+  const tweets: Array<{ content: string, id: string }> = [];
+
+  try {
+    // Twitter's actual GraphQL HomeTimeline response structure
+    const instructions = timeline?.home?.home_timeline_urt?.instructions || [];
+
+    for (const instruction of instructions) {
+      if (instruction?.entries && Array.isArray(instruction.entries)) {
+        for (const entry of instruction.entries) {
+          const result = entry?.content?.itemContent?.tweet_results?.result;
+          if (result?.rest_id && result?.legacy?.full_text) {
+            tweets.push({
+              content: result.legacy.full_text,
+              id: result.rest_id
+            });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.log("Error parsing tweets:", e);
+  }
+
+  return tweets;
 }
 
 // Test runner - when file is executed directly
