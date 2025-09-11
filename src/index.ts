@@ -1,9 +1,9 @@
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input"; // interactive input for login
-import { Api } from "telegram";
 import cron from 'node-cron';
 import { runRedisOperation } from './utils/redisUtils';
+import { fetchTelegramMessages } from './fetchTelegramMessages';
 import 'dotenv/config';
 
 // Replace these with your values
@@ -16,50 +16,6 @@ if (!apiHash) {
   throw new Error("API_HASH environment variable is not set.");
 }
 const stringSession = new StringSession(process.env.TG_SESSION ?? ""); // use existing session if available
-
-async function fetchTelegramMessages(
-  client: TelegramClient
-): Promise<Array<{ id: string; content: string; channelId: string }>> {
-  const channel = process.env.TG_CHANNEL; // configurable channel
-  if (!channel) {
-    throw new Error("TG_CHANNEL environment variable is not set.");
-  }
-  // Fetch channel entity to get the actual channel ID
-  let entity: Api.Channel;
-  try {
-    const resolved = await client.getEntity(channel);
-    if (resolved instanceof Api.Channel) {
-      entity = resolved;
-    } else if (resolved instanceof Api.ChannelForbidden) {
-      throw new Error(`TG_CHANNEL "${channel}" is a private/forbidden channel; cannot fetch history.`);
-    } else {
-      throw new Error(`TG_CHANNEL "${channel}" is not a channel-type peer.`);
-    }
-  } catch (e) {
-    throw new Error(`Failed to resolve TG_CHANNEL \"${channel}\": ${e instanceof Error ? e.message : e}`);
-  }
-  const channelId = String(entity.id);
-  const messages = await client.invoke(
-    new Api.messages.GetHistory({
-      peer: entity,
-      limit: 10,
-    })
-  );
-  const out: Array<{ id: string; content: string; channelId: string }> = [];
-  if ("messages" in messages) {
-    for (const msg of messages.messages as any[]) {
-      const id = typeof msg?.id === 'number' || typeof msg?.id === 'string' ? String(msg.id) : null;
-      const content = typeof msg?.message === 'string' ? msg.message : '';
-      if (!id || !content) continue; // skip service/media-only
-      const formatted = { id, content, channelId };
-      out.push(formatted);
-      console.log(formatted);
-    }
-  } else {
-    console.log("No messages property found in response:", messages);
-  }
-  return out;
-}
 
 async function startTelegramCron() {
   console.log("Starting Telegram client...");
@@ -85,26 +41,18 @@ async function startTelegramCron() {
 
   // Run once at startup
   try {
-    await fetchTelegramMessages(client);
+    await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
   } catch (err) {
     console.error("Startup Telegram fetch failed:", err);
   }
 
-  // Schedule to run every 5 minutes (guarded)
-  let telegramJobRunning = false;
+  // Schedule to run every 5 minutes (no overlap guard)
   cron.schedule('*/5 * * * *', async () => {
-    if (telegramJobRunning) {
-      console.warn('Refetch skipped: previous Telegram job still running.');
-      return;
-    }
-    telegramJobRunning = true;
     console.log('Refetching Telegram messages...');
     try {
-      await fetchTelegramMessages(client);
+      await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
     } catch (err) {
       console.error('Scheduled Telegram fetch failed:', err);
-    } finally {
-      telegramJobRunning = false;
     }
   });
 

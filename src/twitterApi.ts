@@ -147,8 +147,14 @@ async function main() {
 main();
 
 // Schedule to run every 5 minutes
-cron.schedule('*/5 * * * *', () => {
-  console.log('Refetching Twitter messages...');
-  main();
+cron.schedule('*/5 * * * *', async () => {
+  console.log('Refetching Twitter timeline...');
+  try {
+    const timeline = await fetchHomeTimeline();
+    // Process the timeline data here (save to DB, send to another service, etc.)
+    console.log('Fetched timeline:', timeline);
+  } catch (err) {
+    console.error('Scheduled Twitter timeline fetch failed:', err);
+  }
 });
 
