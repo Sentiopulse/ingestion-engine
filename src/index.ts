@@ -8,7 +8,13 @@ import 'dotenv/config';
 
 // Replace these with your values
 const apiId = Number(process.env.API_ID);
-const apiHash = process.env.API_HASH as string;
+const apiHash = process.env.API_HASH ?? "";
+if (!Number.isFinite(apiId)) {
+  throw new Error("API_ID environment variable is missing or not a valid number.");
+}
+if (!apiHash) {
+  throw new Error("API_HASH environment variable is not set.");
+}
 const stringSession = new StringSession(process.env.TG_SESSION ?? ""); // use existing session if available
 
 async function fetchTelegramMessages(
@@ -19,13 +25,15 @@ async function fetchTelegramMessages(
     throw new Error("TG_CHANNEL environment variable is not set.");
   }
   // Fetch channel entity to get the actual channel ID
-  let entity: Api.Channel | Api.ChannelForbidden;
+  let entity: Api.Channel;
   try {
     const resolved = await client.getEntity(channel);
-    if (resolved instanceof Api.Channel || resolved instanceof Api.ChannelForbidden) {
+    if (resolved instanceof Api.Channel) {
       entity = resolved;
+    } else if (resolved instanceof Api.ChannelForbidden) {
+      throw new Error(`TG_CHANNEL "${channel}" is a private/forbidden channel; cannot fetch history.`);
     } else {
-      throw new Error(`TG_CHANNEL \"${channel}\" is not a channel-type peer.`);
+      throw new Error(`TG_CHANNEL "${channel}" is not a channel-type peer.`);
     }
   } catch (e) {
     throw new Error(`Failed to resolve TG_CHANNEL \"${channel}\": ${e instanceof Error ? e.message : e}`);
@@ -76,7 +84,11 @@ async function startTelegramCron() {
   }
 
   // Run once at startup
-  await fetchTelegramMessages(client);
+  try {
+    await fetchTelegramMessages(client);
+  } catch (err) {
+    console.error("Startup Telegram fetch failed:", err);
+  }
 
   // Schedule to run every 5 minutes (guarded)
   let telegramJobRunning = false;
@@ -99,7 +111,9 @@ async function startTelegramCron() {
   // Keep process alive
 }
 
-startTelegramCron();
+startTelegramCron().catch((err) => {
+  console.error("Failed to start Telegram cron:", err);
+});
 
 
 async function main() {
@@ -112,21 +126,4 @@ async function main() {
 
 main();
 
-// Schedule to run every 5 minutes (guard against overlap + handle errors)
-let twitterJobRunning = false;
-cron.schedule('*/5 * * * *', async () => {
-  if (twitterJobRunning) {
-    console.warn('Refetch skipped: previous Twitter job still running.');
-    return;
-  }
-  twitterJobRunning = true;
-  console.log('Refetching Twitter messages...');
-  try {
-    await main();
-  } catch (err) {
-    console.error('Scheduled Twitter fetch failed:', err);
-  } finally {
-    twitterJobRunning = false;
-  }
-});
 
