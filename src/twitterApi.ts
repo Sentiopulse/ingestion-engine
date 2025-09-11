@@ -96,8 +96,7 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Ar
   // Format and return tweets as [{ content, id }]
   const timeline = data.data || data;
   const tweets: Array<{ content: string, id: string, authorId: string }> = [];
-  const seen = new Set<string>();
-  const seenInput = new Set(seenTweetIds);
+  const seenTweetIdsSet = new Set(seenTweetIds);
 
   try {
     // Twitter's actual GraphQL HomeTimeline response structure
@@ -116,9 +115,9 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Ar
           base?.note_tweet?.note_tweet_results?.result?.text;
         const authorId: string | undefined = base?.core?.user_results?.result?.rest_id;
         if (!restId || !fullText || !authorId) continue;
-        if (seenInput.has(restId) || seen.has(restId)) continue;
+        if (seenTweetIdsSet.has(restId)) continue;
         tweets.push({ id: restId, content: fullText, authorId });
-        seen.add(restId);
+        seenTweetIdsSet.add(restId);
       }
     }
   } catch (e) {
