@@ -1,4 +1,4 @@
-
+import cron from 'node-cron';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -142,5 +142,13 @@ async function main() {
     process.exit(1);
   }
 }
+
+// Run once at startup
 main();
+
+// Schedule to run every 5 minutes
+cron.schedule('*/5 * * * *', () => {
+  console.log('Refetching Twitter messages...');
+  main();
+});
 

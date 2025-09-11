@@ -2,6 +2,7 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input"; // interactive input for login
 import { Api } from "telegram";
+import cron from 'node-cron';
 import { runRedisOperation } from './utils/redisUtils';
 import 'dotenv/config';
 
@@ -10,9 +11,36 @@ const apiId = Number(process.env.API_ID);
 const apiHash = process.env.API_HASH as string;
 const stringSession = new StringSession(""); // empty = new login
 
-(async () => {
-  console.log("Starting Telegram client...");
+async function fetchTelegramMessages(client: TelegramClient) {
+  const channel = process.env.TG_CHANNEL; // configurable channel
+  if (!channel) {
+    throw new Error("TG_CHANNEL environment variable is not set.");
+  }
+  // Fetch channel entity to get the actual channel ID
+  const channelEntity = await client.getEntity(channel) as Api.Channel;
+  const channelId = String(channelEntity.id);
+  const messages = await client.invoke(
+    new Api.messages.GetHistory({
+      peer: channel,
+      limit: 10,
+    })
+  );
+  if ("messages" in messages) {
+    messages.messages.forEach((msg: any) => {
+      const formatted = {
+        id: String(msg.id),
+        content: msg.message,
+        channelId: channelId
+      };
+      console.log(formatted);
+    });
+  } else {
+    console.log("No messages property found in response:", messages);
+  }
+}
 
+async function startTelegramCron() {
+  console.log("Starting Telegram client...");
   const client = new TelegramClient(stringSession, apiId, apiHash, {
     connectionRetries: 5,
   });
@@ -33,25 +61,19 @@ const stringSession = new StringSession(""); // empty = new login
     );
   }
 
-  // Example: fetch last 10 messages from a public channel
-  const channel = "@garden_btc"; // replace with any public channel username
-  const messages = await client.invoke(
-    new Api.messages.GetHistory({
-      peer: channel,
-      limit: 10,
-    })
-  );
+  // Run once at startup
+  await fetchTelegramMessages(client);
 
-  if ("messages" in messages) {
-    messages.messages.forEach((msg: any) => {
-      console.log(msg.id, msg.message, msg.date);
-    });
-  } else {
-    console.log("No messages property found in response:", messages);
-  }
+  // Schedule to run every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    console.log('Refetching Telegram messages...');
+    await fetchTelegramMessages(client);
+  });
 
-  await client.disconnect();
-})();
+  // Keep process alive
+}
+
+startTelegramCron();
 
 
 async function main() {
@@ -63,3 +85,4 @@ async function main() {
 }
 
 main();
+
