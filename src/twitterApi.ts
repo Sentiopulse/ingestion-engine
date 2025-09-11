@@ -1,7 +1,8 @@
+
 import dotenv from 'dotenv';
 dotenv.config();
 
-export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
+export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Array<{ id: string; content: string }>> {
   const queryId = "wEpbv0WrfwV6y2Wlf0fxBQ";
   const url = `https://x.com/i/api/graphql/${queryId}/HomeTimeline`;
 
@@ -95,26 +96,32 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []) {
   // Format and return tweets as [{ content, id }]
   const timeline = data.data || data;
   const tweets: Array<{ content: string, id: string }> = [];
+  const seen = new Set<string>();
+  const seenInput = new Set(seenTweetIds);
 
   try {
     // Twitter's actual GraphQL HomeTimeline response structure
     const instructions = timeline?.home?.home_timeline_urt?.instructions || [];
 
     for (const instruction of instructions) {
-      if (instruction?.entries && Array.isArray(instruction.entries)) {
-        for (const entry of instruction.entries) {
-          const result = entry?.content?.itemContent?.tweet_results?.result;
-          if (result?.rest_id && result?.legacy?.full_text) {
-            tweets.push({
-              content: result.legacy.full_text,
-              id: result.rest_id
-            });
-          }
-        }
+      const entries = instruction?.entries ?? (instruction?.entry ? [instruction.entry] : []);
+      for (const entry of entries) {
+        const item = entry?.content?.itemContent;
+        if (!item || item.promotedMetadata) continue; // exclude ads
+        const result = item.tweet_results?.result;
+        const base = result?.__typename === 'TweetWithVisibilityResults' ? result?.tweet : result;
+        const restId: string | undefined = base?.rest_id;
+        const fullText: string | undefined =
+          base?.legacy?.full_text ??
+          base?.note_tweet?.note_tweet_results?.result?.text;
+        if (!restId || !fullText) continue;
+        if (seenInput.has(restId) || seen.has(restId)) continue;
+        tweets.push({ id: restId, content: fullText });
+        seen.add(restId);
       }
     }
   } catch (e) {
-    console.log("Error parsing tweets:", e);
+    console.error("Error parsing tweets:", e);
   }
 
   return tweets;
