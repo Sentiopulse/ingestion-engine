@@ -47,7 +47,7 @@ async function startTelegramCron() {
     console.log('Telegram API usage:', {
       total_requests: usage.total_requests,
       last_request: usage.last_request,
-      account_id: usage.account_handle
+      account_id: usage.account_id
     });
   } catch (err) {
     console.error("Startup Telegram fetch failed:", err);

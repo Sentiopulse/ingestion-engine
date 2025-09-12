@@ -1,5 +1,8 @@
 import dotenv from 'dotenv';
 import cron from 'node-cron';
+import { getApiKeyUsage } from './utils/redisUtils';
+import { trackApiKeyUsage } from './utils/redisUtils';
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
 dotenv.config();
 
 async function fetchViewerAccount(): Promise<{ screenName: string; userId: string } | null> {
@@ -151,13 +154,12 @@ export async function fetchHomeTimeline(
   }
 
   // Track API usage after successful fetch
-  if (process.env.AUTH_TOKEN) {
+  if (AUTH_TOKEN) {
     // Use TWITTER_ID from environment variable for account handle (no '@' prefix)
     const accountHandle = process.env.TWITTER_ID ? process.env.TWITTER_ID : "unknown";
     console.log("Authenticated account:", accountHandle);
 
-    const { trackApiKeyUsage } = await import('./utils/redisUtils');
-    await trackApiKeyUsage(process.env.AUTH_TOKEN as string, accountHandle);
+    await trackApiKeyUsage(AUTH_TOKEN, accountHandle);
   }
 
   return tweets;
@@ -169,14 +171,11 @@ async function main() {
   try {
     const data = await fetchHomeTimeline();
 
-    console.log(JSON.stringify(data, null, 2));
-
-    const { getApiKeyUsage } = await import('./utils/redisUtils');
     const usage = await getApiKeyUsage(process.env.AUTH_TOKEN as string);
     console.log('Twitter API usage:', {
       total_requests: usage.total_requests,
       last_request: usage.last_request,
-      account_id: usage.account_handle
+      account_id: usage.account_id
     });
   } catch (err) {
     console.error('fetchHomeTimeline failed:', err instanceof Error ? err.message : err);

@@ -1,14 +1,16 @@
 import { Api, TelegramClient } from "telegram";
+import { trackApiKeyUsage } from './utils/redisUtils';
 
-export type TelegramMessage = { id: string; content: string; channelId: string };
+export type TelegramMessages = { id: string; content: string; channelId: string };
 
 export async function fetchTelegramMessages(
   client: TelegramClient,
   channel: string
-): Promise<TelegramMessage[]> {
+): Promise<TelegramMessages[]> {
   if (!channel) {
     throw new Error("TG_CHANNEL environment variable is not set.");
   }
+  const apiId = process.env.API_ID;
 
   // Fetch channel entity to get the actual channel ID
   let entity: Api.Channel;
@@ -35,7 +37,7 @@ export async function fetchTelegramMessages(
     })
   );
 
-  const out: TelegramMessage[] = [];
+  const out: TelegramMessages[] = [];
 
   if ("messages" in messages) {
     for (const msg of messages.messages as any[]) {
@@ -51,27 +53,19 @@ export async function fetchTelegramMessages(
   }
 
   // Track API usage after successful fetch
-  if (process.env.API_ID) {
-    let accountHandle: string;
-
+  if (apiId) {
+    let accountId: string;
     try {
-      // Automatically get the logged-in Telegram account
       const me = await client.getMe();
-      if (me) {
-        if (me.username && me.username.length > 0) {
-          accountHandle = `@${me.username}`; // use username if available
-        } else {
-          accountHandle = String(me.id); // fallback to numeric Telegram ID
-        }
+      if (me && me.id) {
+        accountId = String(me.id);
       } else {
-        accountHandle = String(channelId); // fallback if getMe returns nothing
+        throw new Error('Unable to determine Telegram account ID');
       }
     } catch (e) {
-      accountHandle = String(channelId); // fallback on error
+      throw new Error('Unable to determine Telegram account ID');
     }
-
-    const { trackApiKeyUsage } = await import('./utils/redisUtils');
-    await trackApiKeyUsage(process.env.API_ID as string, accountHandle);
+    await trackApiKeyUsage(apiId, accountId);
   }
 
   return out;
