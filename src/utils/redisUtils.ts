@@ -11,18 +11,22 @@ export async function trackApiKeyUsage(apiKey: string, accountHandle?: string): 
       console.warn('trackApiKeyUsage: empty apiKey; skipping');
       return;
     }
-    // Hash the apiKey to avoid storing raw secrets in Redis
-    const hash = crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 32);
-    const key = `api_usage:${hash}`;
-    const now = new Date().toISOString();
-    await client
-      .multi()
-      .hIncrBy(key, 'total_requests', 1)
-      .hSet(key, {
-        last_request: now,
-        ...(accountHandle ? { account_handle: accountHandle } : {}),
-      })
-      .exec();
+    try {
+      // Hash the apiKey to avoid storing raw secrets in Redis
+      const hash = crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 32);
+      const key = `api_usage:${hash}`;
+      const now = new Date().toISOString();
+      await client
+        .multi()
+        .hIncrBy(key, 'total_requests', 1)
+        .hSet(key, {
+          last_request: now,
+          ...(accountHandle ? { account_handle: accountHandle } : {}),
+        })
+        .exec();
+    } catch (err) {
+      console.warn('trackApiKeyUsage: non-fatal Redis error; proceeding without usage update', err);
+    }
   });
 }
 
@@ -33,6 +37,9 @@ export async function trackApiKeyUsage(apiKey: string, accountHandle?: string): 
  */
 export async function getApiKeyUsage(apiKey: string): Promise<{ total_requests: number; last_request: string | null; account_handle?: string }> {
   let result: { total_requests: number; last_request: string | null; account_handle?: string } = { total_requests: 0, last_request: null };
+  if (!apiKey?.trim()) {
+    return result;
+  }
   await runRedisOperation(async (client) => {
     // Hash the apiKey to avoid storing raw secrets in Redis
     const hash = crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 32);
@@ -51,19 +58,29 @@ export async function getApiKeyUsage(apiKey: string): Promise<{ total_requests: 
 
 // Example: Use environment variables for API keys
 async function main() {
-  const telegramUsage = await getApiKeyUsage(process.env.API_ID as string);
-  console.log('Telegram API usage:', {
-    total_requests: telegramUsage.total_requests,
-    last_request: telegramUsage.last_request || 'No last Telegram request recorded.',
-    account_id: telegramUsage.account_handle || 'No account handle recorded.'
-  });
+  const apiId = process.env.API_ID;
+  if (apiId?.trim()) {
+    const telegramUsage = await getApiKeyUsage(apiId);
+    console.log('Telegram API usage:', {
+      total_requests: telegramUsage.total_requests,
+      last_request: telegramUsage.last_request || 'No last Telegram request recorded.',
+      account_id: telegramUsage.account_handle || 'No account id recorded.'
+    });
+  } else {
+    console.log('Telegram API usage: API_ID not set.');
+  }
 
-  const twitterUsage = await getApiKeyUsage(process.env.AUTH_TOKEN as string);
-  console.log('Twitter API usage:', {
-    total_requests: twitterUsage.total_requests,
-    last_request: twitterUsage.last_request || 'No last Twitter request recorded.',
-    account_id: twitterUsage.account_handle || 'No account id recorded.'
-  });
+  const authToken = process.env.AUTH_TOKEN;
+  if (authToken?.trim()) {
+    const twitterUsage = await getApiKeyUsage(authToken);
+    console.log('Twitter API usage:', {
+      total_requests: twitterUsage.total_requests,
+      last_request: twitterUsage.last_request || 'No last Twitter request recorded.',
+      account_id: twitterUsage.account_handle || 'No account id recorded.'
+    });
+  } else {
+    console.log('Twitter API usage: AUTH_TOKEN not set.');
+  }
 }
 
 // Only run main if this file is executed directly (not imported)
