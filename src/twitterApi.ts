@@ -173,7 +173,11 @@ async function main() {
 
     const { getApiKeyUsage } = await import('./utils/redisUtils');
     const usage = await getApiKeyUsage(process.env.AUTH_TOKEN as string);
-    console.log('Twitter API usage:', usage);
+    console.log('Twitter API usage:', {
+      total_requests: usage.total_requests,
+      last_request: usage.last_request,
+      account_id: usage.account_handle
+    });
   } catch (err) {
     console.error('fetchHomeTimeline failed:', err instanceof Error ? err.message : err);
     process.exit(1);

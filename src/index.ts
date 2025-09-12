@@ -44,7 +44,11 @@ async function startTelegramCron() {
     // Print Telegram API usage stats once
     const { getApiKeyUsage } = await import('./utils/redisUtils');
     const usage = await getApiKeyUsage(process.env.API_ID as string);
-    console.log('Telegram API usage:', usage);
+    console.log('Telegram API usage:', {
+      total_requests: usage.total_requests,
+      last_request: usage.last_request,
+      account_id: usage.account_handle
+    });
   } catch (err) {
     console.error("Startup Telegram fetch failed:", err);
   }

@@ -8,7 +8,7 @@ export async function trackApiKeyUsage(apiKey: string, accountHandle?: string): 
   await runRedisOperation(async (client) => {
     const key = `api_usage:${apiKey}`;
     await client.hIncrBy(key, 'total_requests', 1);
-    const now = new Date().toLocaleString();
+    const now = new Date().toISOString();
     await client.hSet(key, 'last_request', now);
     if (accountHandle) {
       await client.hSet(key, 'account_handle', accountHandle);
@@ -43,14 +43,14 @@ async function main() {
   console.log('Telegram API usage:', {
     total_requests: telegramUsage.total_requests,
     last_request: telegramUsage.last_request || 'No last Telegram request recorded.',
-    account_handle: telegramUsage.account_handle || 'No account handle recorded.'
+    account_id: telegramUsage.account_handle || 'No account handle recorded.'
   });
 
   const twitterUsage = await getApiKeyUsage(process.env.AUTH_TOKEN as string);
   console.log('Twitter API usage:', {
     total_requests: twitterUsage.total_requests,
     last_request: twitterUsage.last_request || 'No last Twitter request recorded.',
-    account_handle: twitterUsage.account_handle || 'No account handle recorded.'
+    account_id: twitterUsage.account_handle || 'No account id recorded.'
   });
 }
 
