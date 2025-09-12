@@ -15,21 +15,21 @@ async function ensureRedisConnected() {
     redisConnected = true;
   }
 }
-export async function trackApiKeyUsage(apiKey: string, accountId?: string): Promise<void> {
-  if (!apiKey?.trim()) {
-    console.warn('trackApiKeyUsage: empty apiKey; skipping');
+export async function trackApiKeyUsage({ accountId, platform }: { accountId: string, platform: 'telegram' | 'twitter' }): Promise<void> {
+  if (!accountId?.trim()) {
+    console.warn('trackApiKeyUsage: empty accountId; skipping');
     return;
   }
 
   try {
     await ensureRedisConnected();
     let key: string;
-    if (process.env.TWITTER_ACCOUNT_ID && apiKey === process.env.TWITTER_ACCOUNT_ID) {
-      key = `twitter_accounts:${apiKey}`;
-    } else if (process.env.TELEGRAM_ACCOUNT_ID && apiKey === process.env.TELEGRAM_ACCOUNT_ID) {
-      key = `telegram_accounts:${apiKey}`;
+    if (platform === 'twitter') {
+      key = `twitter_accounts:${accountId}`;
+    } else if (platform === 'telegram') {
+      key = `telegram_accounts:${accountId}`;
     } else {
-      key = `api_usage:${apiKey}`;
+      key = `api_usage:${accountId}`;
     }
     const now = new Date().toISOString();
     await redisClient
@@ -37,7 +37,7 @@ export async function trackApiKeyUsage(apiKey: string, accountId?: string): Prom
       .hIncrBy(key, 'total_requests', 1)
       .hSet(key, {
         last_request: now,
-        ...(accountId ? { account_id: accountId } : {}),
+        account_id: accountId,
       })
       .exec();
   } catch (err) {
@@ -46,25 +46,28 @@ export async function trackApiKeyUsage(apiKey: string, accountId?: string): Prom
 }
 
 /**
- * Get API key usage stats from Redis.
- * @param apiKey The API key to query
+ * Get API usage stats from Redis.
+ * @param accountId The account ID to query
+ * @param platform The platform ('telegram' or 'twitter')
  * @returns Object with total_requests and last_request
  */
-export async function getApiKeyUsage(apiKey: string): Promise<{ total_requests: number; last_request: string | null; account_id?: string }> {
+export async function getApiKeyUsage(accountId: string, platform: 'telegram' | 'twitter'): Promise<{ total_requests: number; last_request: string | null; account_id?: string }> {
   let result: { total_requests: number; last_request: string | null; account_id?: string } = { total_requests: 0, last_request: null };
-  if (!apiKey?.trim()) {
+  if (!accountId?.trim()) {
     return result;
   }
-
+  if (platform !== 'twitter' && platform !== 'telegram') {
+    throw new Error('getApiKeyUsage: platform must be "twitter" or "telegram"');
+  }
   try {
     await ensureRedisConnected();
     let key: string;
-    if (process.env.TWITTER_ACCOUNT_ID && apiKey === process.env.TWITTER_ACCOUNT_ID) {
-      key = `twitter_accounts:${apiKey}`;
-    } else if (process.env.TELEGRAM_ACCOUNT_ID && apiKey === process.env.TELEGRAM_ACCOUNT_ID) {
-      key = `telegram_accounts:${apiKey}`;
+    if (platform === 'twitter') {
+      key = `twitter_accounts:${accountId}`;
+    } else if (platform === 'telegram') {
+      key = `telegram_accounts:${accountId}`;
     } else {
-      key = `api_usage:${apiKey}`;
+      throw new Error('getApiKeyUsage: platform must be "twitter" or "telegram"');
     }
     const data = await redisClient.hGetAll(key);
     result.total_requests = data.total_requests ? parseInt(data.total_requests) : 0;
@@ -76,40 +79,6 @@ export async function getApiKeyUsage(apiKey: string): Promise<{ total_requests: 
     console.error('Redis operation failed:', err);
   }
   return result;
-}
-
-
-
-// Example: Use environment variables for API keys
-async function main() {
-  const telegramAccountId = process.env.TELEGRAM_ACCOUNT_ID;
-  if (telegramAccountId?.trim()) {
-    const telegramUsage = await getApiKeyUsage(telegramAccountId);
-    console.log('Telegram API usage:', {
-      total_requests: telegramUsage.total_requests,
-      last_request: telegramUsage.last_request || 'No last Telegram request recorded.',
-      account_id: telegramUsage.account_id || 'No account id recorded.'
-    });
-  } else {
-    console.log('Telegram API usage: TELEGRAM_ACCOUNT_ID not set.');
-  }
-
-  const twitterAccountId = process.env.TWITTER_ACCOUNT_ID;
-  if (twitterAccountId?.trim()) {
-    const twitterUsage = await getApiKeyUsage(twitterAccountId);
-    console.log('Twitter API usage:', {
-      total_requests: twitterUsage.total_requests,
-      last_request: twitterUsage.last_request || 'No last Twitter request recorded.',
-      account_id: twitterUsage.account_id || 'No account id recorded.'
-    });
-  } else {
-    console.log('Twitter API usage: TWITTER_ACCOUNT_ID not set.');
-  }
-}
-
-// Only run main if this file is executed directly (not imported)
-if (require.main === module) {
-  main();
 }
 
 

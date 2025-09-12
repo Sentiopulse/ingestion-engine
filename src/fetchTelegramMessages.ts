@@ -65,7 +65,7 @@ export async function fetchTelegramMessages(
     } catch (e) {
       throw new Error('Unable to determine Telegram account ID');
     }
-    await trackApiKeyUsage(apiId, accountId);
+    await trackApiKeyUsage({ accountId, platform: 'telegram' });
   }
 
   return out;

@@ -154,12 +154,10 @@ export async function fetchHomeTimeline(
   }
 
   // Track API usage after successful fetch
-  if (AUTH_TOKEN) {
-    // Use TWITTER_ID from environment variable for account handle (no '@' prefix)
-    const accountHandle = process.env.TWITTER_ID ? process.env.TWITTER_ID : "unknown";
-    console.log("Authenticated account:", accountHandle);
-
-    await trackApiKeyUsage(AUTH_TOKEN, accountHandle);
+  if (process.env.TWITTER_ID) {
+    const accountId = process.env.TWITTER_ID;
+    console.log("Authenticated account:", accountId);
+    await trackApiKeyUsage({ accountId, platform: 'twitter' });
   }
 
   return tweets;
@@ -171,7 +169,10 @@ async function main() {
   try {
     const data = await fetchHomeTimeline();
 
-    const usage = await getApiKeyUsage(process.env.AUTH_TOKEN as string);
+    const viewer = await fetchViewerAccount();
+    const accountId = viewer?.userId ?? process.env.TWITTER_ACCOUNT_ID;
+    if (!accountId) throw new Error('Missing TWITTER_ACCOUNT_ID and Viewer lookup failed.');
+    const usage = await getApiKeyUsage(accountId, 'twitter');
     console.log('Twitter API usage:', {
       total_requests: usage.total_requests,
       last_request: usage.last_request,
