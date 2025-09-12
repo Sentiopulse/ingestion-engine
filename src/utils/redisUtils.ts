@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { createClient, RedisClientType } from 'redis';
 
 /**
@@ -6,13 +7,22 @@ import { createClient, RedisClientType } from 'redis';
  */
 export async function trackApiKeyUsage(apiKey: string, accountHandle?: string): Promise<void> {
   await runRedisOperation(async (client) => {
-    const key = `api_usage:${apiKey}`;
-    await client.hIncrBy(key, 'total_requests', 1);
-    const now = new Date().toISOString();
-    await client.hSet(key, 'last_request', now);
-    if (accountHandle) {
-      await client.hSet(key, 'account_handle', accountHandle);
+    if (!apiKey?.trim()) {
+      console.warn('trackApiKeyUsage: empty apiKey; skipping');
+      return;
     }
+    // Hash the apiKey to avoid storing raw secrets in Redis
+    const hash = crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 32);
+    const key = `api_usage:${hash}`;
+    const now = new Date().toISOString();
+    await client
+      .multi()
+      .hIncrBy(key, 'total_requests', 1)
+      .hSet(key, {
+        last_request: now,
+        ...(accountHandle ? { account_handle: accountHandle } : {}),
+      })
+      .exec();
   });
 }
 
@@ -24,7 +34,9 @@ export async function trackApiKeyUsage(apiKey: string, accountHandle?: string): 
 export async function getApiKeyUsage(apiKey: string): Promise<{ total_requests: number; last_request: string | null; account_handle?: string }> {
   let result: { total_requests: number; last_request: string | null; account_handle?: string } = { total_requests: 0, last_request: null };
   await runRedisOperation(async (client) => {
-    const key = `api_usage:${apiKey}`;
+    // Hash the apiKey to avoid storing raw secrets in Redis
+    const hash = crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 32);
+    const key = `api_usage:${hash}`;
     const data = await client.hGetAll(key);
     result.total_requests = data.total_requests ? parseInt(data.total_requests) : 0;
     result.last_request = data.last_request ? data.last_request : null;
