@@ -4,6 +4,7 @@ import cron from 'node-cron';
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { fetchTelegramMessages } from './fetchTelegramMessages';
+import { getApiKeyUsage } from './utils/redisUtils';
 
 // Replace these with your values
 const apiId = Number(process.env.API_ID);
@@ -42,10 +43,9 @@ async function startTelegramCron() {
   try {
     await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
     // Print Telegram API usage by accountId (not API_ID)
-    const { getApiKeyUsage } = await import('./utils/redisUtils');
     const me = await client.getMe();
     const accountId = String(me.id);
-    const usage = await getApiKeyUsage(accountId, 'telegram');
+    const usage = await getApiKeyUsage({accountId, platform:'telegram'});
     console.log('Telegram API usage:', {
       total_requests: usage.total_requests,
       last_request: usage.last_request,

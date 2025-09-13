@@ -29,7 +29,7 @@ export async function trackApiKeyUsage({ accountId, platform }: { accountId: str
     } else if (platform === 'telegram') {
       key = `telegram_accounts:${accountId}`;
     } else {
-      key = `api_usage:${accountId}`;
+      throw new Error('trackApiKeyUsage: platform must be "twitter" or "telegram"');
     }
     const now = new Date().toISOString();
     await redisClient
@@ -51,7 +51,14 @@ export async function trackApiKeyUsage({ accountId, platform }: { accountId: str
  * @param platform The platform ('telegram' or 'twitter')
  * @returns Object with total_requests and last_request
  */
-export async function getApiKeyUsage(accountId: string, platform: 'telegram' | 'twitter'): Promise<{ total_requests: number; last_request: string | null; account_id?: string }> {
+
+interface dataType {
+  accountId: string,
+  platform: 'telegram' | 'twitter'
+}
+
+export async function getApiKeyUsage(data: dataType): Promise<{ total_requests: number; last_request: string | null; account_id?: string }> {
+  const { accountId, platform } = data;
   let result: { total_requests: number; last_request: string | null; account_id?: string } = { total_requests: 0, last_request: null };
   if (!accountId?.trim()) {
     return result;
@@ -64,11 +71,10 @@ export async function getApiKeyUsage(accountId: string, platform: 'telegram' | '
     let key: string;
     if (platform === 'twitter') {
       key = `twitter_accounts:${accountId}`;
-    } else if (platform === 'telegram') {
-      key = `telegram_accounts:${accountId}`;
     } else {
-      throw new Error('getApiKeyUsage: platform must be "twitter" or "telegram"');
+      key = `telegram_accounts:${accountId}`;
     }
+
     const data = await redisClient.hGetAll(key);
     result.total_requests = data.total_requests ? parseInt(data.total_requests) : 0;
     result.last_request = data.last_request ? data.last_request : null;

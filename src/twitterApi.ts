@@ -172,7 +172,7 @@ async function main() {
     const viewer = await fetchViewerAccount();
     const accountId = viewer?.userId ?? process.env.TWITTER_ACCOUNT_ID;
     if (!accountId) throw new Error('Missing TWITTER_ACCOUNT_ID and Viewer lookup failed.');
-    const usage = await getApiKeyUsage(accountId, 'twitter');
+    const usage = await getApiKeyUsage({accountId, platform:'twitter'});
     console.log('Twitter API usage:', {
       total_requests: usage.total_requests,
       last_request: usage.last_request,
