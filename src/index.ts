@@ -1,10 +1,10 @@
-import { TelegramClient } from "telegram";
-import { StringSession } from "telegram/sessions";
+import 'dotenv/config';
 import input from "input"; // interactive input for login
 import cron from 'node-cron';
-import { runRedisOperation } from './utils/redisUtils';
+import { TelegramClient } from "telegram";
+import { StringSession } from "telegram/sessions";
 import { fetchTelegramMessages } from './fetchTelegramMessages';
-import 'dotenv/config';
+import { getApiKeyUsage } from './utils/redisUtils';
 
 // Replace these with your values
 const apiId = Number(process.env.API_ID);
@@ -42,6 +42,15 @@ async function startTelegramCron() {
   // Run once at startup
   try {
     await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
+    // Print Telegram API usage by accountId (not API_ID)
+    const me = await client.getMe();
+    const accountId = String(me.id);
+    const usage = await getApiKeyUsage({accountId, platform:'telegram'});
+    console.log('Telegram API usage:', {
+      total_requests: usage.total_requests,
+      last_request: usage.last_request,
+      account_id: usage.account_id
+    });
   } catch (err) {
     console.error("Startup Telegram fetch failed:", err);
   }
@@ -51,6 +60,7 @@ async function startTelegramCron() {
     console.log('Refetching Telegram messages...');
     try {
       await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
+      // No duplicate print of Telegram API usage
     } catch (err) {
       console.error('Scheduled Telegram fetch failed:', err);
     }
@@ -64,14 +74,5 @@ startTelegramCron().catch((err) => {
 });
 
 
-async function main() {
-  await runRedisOperation(async (client) => {
-    await client.set('test-key', 'hello-redis');
-    const value = await client.get('test-key');
-    console.log('Read value from Redis:', value);
-  });
-}
-
-main();
 
 

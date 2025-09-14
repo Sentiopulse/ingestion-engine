@@ -1,8 +1,38 @@
-import cron from 'node-cron';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
+import { getApiKeyUsage } from './utils/redisUtils';
+import { trackApiKeyUsage } from './utils/redisUtils';
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
 dotenv.config();
 
-export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Array<{ id: string; content: string; authorId: string }>> {
+async function fetchViewerAccount(): Promise<{ screenName: string; userId: string } | null> {
+  const url = "https://x.com/i/api/graphql/jMaTSZ5dqXctUg5f97R6xw/Viewer";
+
+  const headers = {
+    "authorization": `Bearer ${process.env.BEARER}`,
+    "x-csrf-token": process.env.CSRF_TOKEN as string,
+    "cookie": `auth_token=${process.env.AUTH_TOKEN}; ct0=${process.env.CSRF_TOKEN}`,
+  };
+
+  const res = await fetch(url, { method: "GET", headers });
+  if (!res.ok) {
+    console.error("Viewer API request failed:", res.status, res.statusText);
+    return null;
+  }
+
+  const data = await res.json();
+  const user = data?.data?.viewer?.user_results?.result;
+  if (!user) return null;
+
+  return {
+    screenName: user.legacy?.screen_name,
+    userId: user.rest_id,
+  };
+}
+
+export async function fetchHomeTimeline(
+  seenTweetIds: string[] = []
+): Promise<Array<{ id: string; content: string; authorId: string }>> {
   const queryId = "wEpbv0WrfwV6y2Wlf0fxBQ";
   const url = `https://x.com/i/api/graphql/${queryId}/HomeTimeline`;
 
@@ -93,13 +123,12 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Ar
     throw new Error(`Twitter API errors: ${JSON.stringify(data.errors)}`);
   }
 
-  // Format and return tweets as [{ content, id }]
+  // Format and return tweets
   const timeline = data.data || data;
-  const tweets: Array<{ content: string, id: string, authorId: string }> = [];
+  const tweets: Array<{ content: string; id: string; authorId: string }> = [];
   const seenTweetIdsSet = new Set(seenTweetIds);
 
   try {
-    // Twitter's actual GraphQL HomeTimeline response structure
     const instructions = timeline?.home?.home_timeline_urt?.instructions || [];
 
     for (const instruction of instructions) {
@@ -124,6 +153,13 @@ export async function fetchHomeTimeline(seenTweetIds: string[] = []): Promise<Ar
     console.error("Error parsing tweets:", e);
   }
 
+  // Track API usage after successful fetch
+  if (process.env.TWITTER_ID) {
+    const accountId = process.env.TWITTER_ID;
+    console.log("Authenticated account:", accountId);
+    await trackApiKeyUsage({ accountId, platform: 'twitter' });
+  }
+
   return tweets;
 }
 
@@ -133,10 +169,15 @@ async function main() {
   try {
     const data = await fetchHomeTimeline();
 
-    // Show JSON response (truncated for readability)
-    const jsonString = JSON.stringify(data, null, 2);
-
-    console.log(jsonString);
+    const viewer = await fetchViewerAccount();
+    const accountId = viewer?.userId ?? process.env.TWITTER_ACCOUNT_ID;
+    if (!accountId) throw new Error('Missing TWITTER_ACCOUNT_ID and Viewer lookup failed.');
+    const usage = await getApiKeyUsage({accountId, platform:'twitter'});
+    console.log('Twitter API usage:', {
+      total_requests: usage.total_requests,
+      last_request: usage.last_request,
+      account_id: usage.account_id
+    });
   } catch (err) {
     console.error('fetchHomeTimeline failed:', err instanceof Error ? err.message : err);
     process.exit(1);
@@ -151,10 +192,8 @@ cron.schedule('*/5 * * * *', async () => {
   console.log('Refetching Twitter timeline...');
   try {
     const timeline = await fetchHomeTimeline();
-    // Process the timeline data here (save to DB, send to another service, etc.)
     console.log('Fetched timeline:', timeline);
   } catch (err) {
     console.error('Scheduled Twitter timeline fetch failed:', err);
   }
 });
-
