@@ -19,7 +19,7 @@ async function testTelegramAccountRotation() {
     try {
         // Test 1: Get all accounts and show their usage
         console.log('📊 Test 1: Fetching all Telegram accounts...');
-        const allAccounts = await telegramAccountManager.getAllAccountsUsage();
+        const allAccounts = await telegramAccountManager.getAllAccountsWithCredentials();
 
         if (allAccounts.length === 0) {
             console.log('❌ No Telegram accounts found in Redis');
@@ -60,7 +60,7 @@ async function testTelegramAccountRotation() {
 
         // Test 3: Show final state
         console.log('📈 Test 3: Final usage state after rotation...');
-        const finalAccounts = await telegramAccountManager.getAllAccountsUsage();
+        const finalAccounts = await telegramAccountManager.getAllAccountsWithCredentials();
         finalAccounts.forEach((account, index) => {
             console.log(`   Account ${index + 1}: ${account.accountId}`);
             console.log(`     Last used: ${account.lastUsed || 'Never'}`);

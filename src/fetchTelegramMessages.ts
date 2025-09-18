@@ -13,7 +13,9 @@ export async function fetchTelegramMessages(
     throw new Error("TELEGRAM_TG_CHANNEL is not set in account credentials.");
   }
 
-  console.log(`Using Telegram account: ${account.accountId} for channel: ${channel}`);
+  if (process.env.DEBUG_TELEGRAM === '1') {
+    console.log(`Using Telegram account: ${account.accountId} for channel: ${channel}`);
+  }
 
   // Fetch channel entity to get the actual channel ID
   let entity: Api.Channel;
@@ -55,8 +57,6 @@ export async function fetchTelegramMessages(
     console.log("No messages property found in response:", messages);
   }
 
-  // Track API usage after successful fetch
-  await trackApiKeyUsage({ accountId: account.accountId, platform: 'telegram' });
 
   return out;
 }

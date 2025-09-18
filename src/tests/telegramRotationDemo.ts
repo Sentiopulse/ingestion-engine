@@ -19,7 +19,7 @@ async function simulateTelegramFetch() {
     try {
         // Show initial state
         console.log('📊 Initial account usage state:');
-        const initialAccounts = await telegramAccountManager.getAllAccountsUsage();
+        const initialAccounts = await telegramAccountManager.getAllAccountsWithCredentials();
         initialAccounts.forEach((account, index) => {
             console.log(`   ${index + 1}. ${account.accountId}`);
             console.log(`      Last used: ${account.lastUsed || 'Never'}`);
@@ -54,7 +54,7 @@ async function simulateTelegramFetch() {
         }
 
         console.log('📈 Final account usage state:');
-        const finalAccounts = await telegramAccountManager.getAllAccountsUsage();
+        const finalAccounts = await telegramAccountManager.getAllAccountsWithCredentials();
 
         // Sort by last used to show the rotation order
         finalAccounts.sort((a, b) => {

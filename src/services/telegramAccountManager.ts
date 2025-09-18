@@ -117,16 +117,33 @@ export class TelegramAccountManager {
     }
 
     /**
-     * Mark an account as used (updates the tracking in Redis)
+     * Mark an account as used (updates the tracking in Redis and releases the selection lock)
      */
     async markAccountAsUsed(accountId: string): Promise<void> {
+        await this.trackApiKeyUsageLocal(accountId);
+        // Best-effort unlock; lock has TTL as a safety net
+        try { await this.redisClient.del(`lock:telegram:${accountId}`); } catch { }
+    }
+
+    /**
+     * Local usage tracking for Telegram accounts
+     */
+    private async trackApiKeyUsageLocal(accountId: string): Promise<void> {
         await trackApiKeyUsage({ accountId, platform: 'telegram' });
     }
 
     /**
-     * Get usage statistics for all accounts
+     * Get usage statistics for all accounts (no credentials)
      */
-    async getAllAccountsUsage(): Promise<TelegramAccount[]> {
+    async getAllAccountsUsage(): Promise<Array<{ accountId: string; lastUsed?: string; totalRequests?: number }>> {
+        const accounts = await this.fetchAllAccounts();
+        return accounts.map(({ accountId, lastUsed, totalRequests }) => ({ accountId, lastUsed, totalRequests }));
+    }
+
+    /**
+     * Get all accounts with credentials (full info)
+     */
+    async getAllAccountsWithCredentials(): Promise<TelegramAccount[]> {
         return await this.fetchAllAccounts();
     }
 

@@ -1,6 +1,6 @@
 import { createClient } from 'redis';
 import { decrypt } from '../lib/encryption';
-import { getApiKeyUsage, trackApiKeyUsage } from '../utils/redisUtils';
+import { createHash } from 'crypto';
 
 export interface TwitterAccount {
     accountId: string;
@@ -65,11 +65,12 @@ export class TwitterAccountManager {
                     TWITTER_CSRF_TOKEN: decrypt(encryptedAccount.TWITTER_CSRF_TOKEN),
                 };
 
-                // Generate account ID from auth token (first 8 chars for uniqueness)
-                const accountId = `twitter_${credentials.TWITTER_AUTH_TOKEN.substring(0, 8)}`;
+                // Generate stable, non-reversible account ID (SHA-256, 12 hex chars)
+                const token = credentials.TWITTER_AUTH_TOKEN;
+                const accountId = `twitter_${createHash('sha256').update(token).digest('hex').slice(0, 12)}`;
 
-                // Get usage statistics from Redis
-                const usage = await getApiKeyUsage({ accountId, platform: 'twitter' });
+                // Get usage statistics from Redis (same client)
+                const usage = await this.getApiKeyUsageLocal(accountId);
 
                 accounts.push({
                     accountId,
@@ -107,20 +108,48 @@ export class TwitterAccountManager {
             return new Date(a.lastUsed).getTime() - new Date(b.lastUsed).getTime();
         });
 
-        const selectedAccount = accounts[0];
-
-        console.log(`Selected Twitter account: ${selectedAccount.accountId}`);
-        console.log(`Last used: ${selectedAccount.lastUsed || 'Never'}`);
-        console.log(`Total requests: ${selectedAccount.totalRequests || 0}`);
-
-        return selectedAccount;
+        for (const acc of accounts) {
+            const lockKey = `lock:twitter:${acc.accountId}`;
+            const ok = await this.redisClient.set(lockKey, '1', { NX: true, PX: 15000 });
+            if (ok === 'OK') {
+                console.debug(`[TwitterAccountManager] Selected account=${acc.accountId} lastUsed=${acc.lastUsed ?? 'Never'} totalRequests=${acc.totalRequests ?? 0}`);
+                return acc;
+            }
+        }
+        throw new Error('No available Twitter accounts to claim (all locked).');
     }
 
     /**
-     * Mark an account as used (updates the tracking in Redis)
+     * Mark an account as used (updates the tracking in Redis and releases the selection lock)
      */
     async markAccountAsUsed(accountId: string): Promise<void> {
-        await trackApiKeyUsage({ accountId, platform: 'twitter' });
+        await this.trackApiKeyUsageLocal(accountId);
+        // Best-effort unlock; lock has TTL as a safety net
+        try { await this.redisClient.del(`lock:twitter:${accountId}`); } catch { }
+    }
+
+    /**
+     * Local usage tracking for Twitter accounts
+     */
+    private async getApiKeyUsageLocal(accountId: string): Promise<{ total_requests: number; last_request: string | null }> {
+        await this.ensureConnected();
+        const key = `twitter_accounts:${accountId}`;
+        const data = await this.redisClient.hGetAll(key);
+        return {
+            total_requests: data?.total_requests ? parseInt(data.total_requests, 10) : 0,
+            last_request: data?.last_request ?? null,
+        };
+    }
+
+    private async trackApiKeyUsageLocal(accountId: string): Promise<void> {
+        await this.ensureConnected();
+        const key = `twitter_accounts:${accountId}`;
+        const now = new Date().toISOString();
+        await this.redisClient
+            .multi()
+            .hIncrBy(key, 'total_requests', 1)
+            .hSet(key, { last_request: now, account_id: accountId })
+            .exec();
     }
 
     /**
