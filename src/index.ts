@@ -27,14 +27,16 @@ async function createTelegramClient(account: TelegramAccount): Promise<TelegramC
     throw new Error(`API_HASH not set for account ${account.accountId}`);
   }
 
-
-  // Resolve per-account session from env; require pre-generated session in non-interactive envs
-  const sessionEnvKey = `TG_SESSION_${account.accountId.toUpperCase()}`;
-  const sessionStr = process.env[sessionEnvKey] ?? "";
+  // Fetch per-account session string from Redis (not env)
+  const redisClient = (telegramAccountManager as any).redisClient;
+  await redisClient.connect?.();
+  const sessionKey = `telegram_session:${account.accountId}`;
+  let sessionStr = await redisClient.get(sessionKey);
   const isInteractive = Boolean(process.stdin.isTTY);
   if (!sessionStr && !isInteractive) {
-    throw new Error(`Missing ${sessionEnvKey}. Generate a session string for ${account.accountId} before running cron.`);
+    throw new Error(`Missing session in Redis for ${account.accountId} (key: ${sessionKey}). Generate and store a session string before running cron.`);
   }
+  sessionStr = sessionStr || "";
   const stringSession = new StringSession(sessionStr);
   const client = new TelegramClient(stringSession, apiId, apiHash, {
     connectionRetries: 5,
@@ -51,7 +53,7 @@ async function createTelegramClient(account: TelegramAccount): Promise<TelegramC
   const saved = client.session.save();
   if (process.env.PRINT_TG_SESSION === "1" && isInteractive) {
     // Emit an export-ready line deliberately, instead of dumping secrets in logs
-    console.log(`export ${sessionEnvKey}="${saved}"`);
+    console.log(`export ${sessionKey}="${saved}"`);
   }
 
   // Store the client for reuse

@@ -22,14 +22,7 @@ async function moveEnvToRedis() {
     await ensureRedisConnected();
     // Define which keys belong to which service
     const twitterKeys = ['TWITTER_AUTH_TOKEN', 'TWITTER_BEARER', 'TWITTER_CSRF_TOKEN'];
-    const telegramKeys = ['API_ID', 'API_HASH', 'TG_CHANNEL']; // Map to original env names
-
-    // Map original env names to expected names
-    const telegramKeyMap = {
-        'API_ID': 'TELEGRAM_API_ID',
-        'API_HASH': 'TELEGRAM_API_HASH',
-        'TG_CHANNEL': 'TELEGRAM_TG_CHANNEL'
-    };
+    const telegramKeys = ['TELEGRAM_API_ID', 'TELEGRAM_API_HASH', 'TELEGRAM_TG_CHANNEL'];
 
     // Encrypt each value individually and store as an object
     const twitterAccount: Record<string, string> = {};
@@ -40,9 +33,7 @@ async function moveEnvToRedis() {
         if (twitterKeys.includes(key)) {
             twitterAccount[key] = encrypt(value);
         } else if (telegramKeys.includes(key)) {
-            // Map the original key to the expected key name
-            const mappedKey = telegramKeyMap[key as keyof typeof telegramKeyMap];
-            telegramAccount[mappedKey] = encrypt(value);
+            telegramAccount[key] = encrypt(value);
         } else {
             otherVars[key] = encrypt(value);
         }
