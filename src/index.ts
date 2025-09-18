@@ -7,8 +7,8 @@ import { fetchTelegramMessages } from './fetchTelegramMessages';
 import { getApiKeyUsage } from './utils/redisUtils';
 
 // Replace these with your values
-const apiId = Number(process.env.API_ID);
-const apiHash = process.env.API_HASH ?? "";
+const apiId = Number(process.env.TELEGRAM_API_ID);
+const apiHash = process.env.TELEGRAM_API_HASH ?? "";
 if (!Number.isFinite(apiId)) {
   throw new Error("API_ID environment variable is missing or not a valid number.");
 }
@@ -41,11 +41,11 @@ async function startTelegramCron() {
 
   // Run once at startup
   try {
-    await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
+    await fetchTelegramMessages(client, process.env.TELEGRAM_TG_CHANNEL!);
     // Print Telegram API usage by accountId (not API_ID)
     const me = await client.getMe();
     const accountId = String(me.id);
-    const usage = await getApiKeyUsage({accountId, platform:'telegram'});
+    const usage = await getApiKeyUsage({ accountId, platform: 'telegram' });
     console.log('Telegram API usage:', {
       total_requests: usage.total_requests,
       last_request: usage.last_request,
@@ -59,7 +59,7 @@ async function startTelegramCron() {
   cron.schedule('*/5 * * * *', async () => {
     console.log('Refetching Telegram messages...');
     try {
-      await fetchTelegramMessages(client, process.env.TG_CHANNEL!);
+      await fetchTelegramMessages(client, process.env.TELEGRAM_TG_CHANNEL!);
       // No duplicate print of Telegram API usage
     } catch (err) {
       console.error('Scheduled Telegram fetch failed:', err);

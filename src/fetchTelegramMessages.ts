@@ -8,9 +8,9 @@ export async function fetchTelegramMessages(
   channel: string
 ): Promise<TelegramMessages[]> {
   if (!channel) {
-    throw new Error("TG_CHANNEL environment variable is not set.");
+    throw new Error("TELEGRAM_TG_CHANNEL environment variable is not set.");
   }
-  const apiId = process.env.API_ID;
+  const apiId = process.env.TELEGRAM_API_ID;
 
   // Fetch channel entity to get the actual channel ID
   let entity: Api.Channel;

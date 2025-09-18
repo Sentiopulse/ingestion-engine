@@ -1,8 +1,9 @@
 import { createClient } from 'redis';
+import { mask } from '../lib/utils/string';
 // Decrypt is dynamically imported only when --decrypt is used.
 
 async function showEnvVariables() {
-    const redisClient = createClient({ url: process.env.REDIS_URL});
+    const redisClient = createClient({ url: process.env.REDIS_URL });
     const decryptFlag = process.argv.includes('--decrypt');
     let decryptFn: ((v: string) => string) | null = null;
     if (decryptFlag) {
@@ -10,53 +11,38 @@ async function showEnvVariables() {
         decryptFn = mod.decrypt;
     }
     await redisClient.connect();
-    // Show Twitter accounts
-    const twitterRaw = await redisClient.get('twitter-accounts');
-    console.log('Twitter Accounts:');
-    if (twitterRaw) {
-        let twitterAccounts: any[];
-        try {
-            twitterAccounts = JSON.parse(twitterRaw);
-        } catch (e) {
-            twitterAccounts = [{ error: 'Failed to parse' }];
+    await showAccounts(redisClient, decryptFlag, decryptFn);
+    // Unified function to show both Twitter and Telegram accounts
+    async function showAccounts(redisClient: any, decryptFlag: boolean, decryptFn: ((v: string) => string) | null) {
+        const services = [
+            { name: 'Twitter', key: 'twitter-accounts' },
+            { name: 'Telegram', key: 'telegram-accounts' }
+        ];
+        for (const service of services) {
+            const raw = await redisClient.get(service.key);
+            console.log(`\n${service.name} Accounts:`);
+            if (raw) {
+                let accounts: any[];
+                try {
+                    accounts = JSON.parse(raw);
+                } catch (e) {
+                    accounts = [{ error: 'Failed to parse' }];
+                }
+                accounts.forEach((acc, idx) => {
+                    console.log(`Account ${idx + 1}:`);
+                    Object.entries(acc).forEach(([k, v]) => {
+                        const shown = decryptFlag && decryptFn ? decryptFn(v as string) : mask(v as string);
+                        console.log(`  ${k}: ${shown}`);
+                    });
+                });
+            } else {
+                console.log('  (none)');
+            }
         }
-        twitterAccounts.forEach((acc, idx) => {
-            console.log(`Account ${idx + 1}:`);
-            Object.entries(acc).forEach(([k, v]) => {
-                const shown = decryptFlag && decryptFn ? decryptFn(v as string) : mask(v as string);
-                console.log(`  ${k}: ${shown}`);
-            });
-        });
-    } else {
-        console.log('  (none)');
-    }
-
-    // Show Telegram accounts
-    const telegramRaw = await redisClient.get('telegram-accounts');
-    console.log('\nTelegram Accounts:');
-    if (telegramRaw) {
-        let telegramAccounts: any[];
-        try {
-            telegramAccounts = JSON.parse(telegramRaw);
-        } catch (e) {
-            telegramAccounts = [{ error: 'Failed to parse' }];
-        }
-        telegramAccounts.forEach((acc, idx) => {
-            console.log(`Account ${idx + 1}:`);
-            Object.entries(acc).forEach(([k, v]) => {
-                const shown = decryptFlag && decryptFn ? decryptFn(v as string) : mask(v as string);
-                console.log(`  ${k}: ${shown}`);
-            });
-        });
-    } else {
-        console.log('  (none)');
     }
     await redisClient.quit();
 }
 
 showEnvVariables();
 
-function mask(v: string): string {
-    if (!v) return '';
-    return v.length <= 8 ? '********' : `${v.slice(0, 4)}…${v.slice(-4)}`;
-}
+

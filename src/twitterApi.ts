@@ -2,16 +2,16 @@ import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { getApiKeyUsage } from './utils/redisUtils';
 import { trackApiKeyUsage } from './utils/redisUtils';
-const AUTH_TOKEN = process.env.AUTH_TOKEN;
+const AUTH_TOKEN = process.env.TWITTER_AUTH_TOKEN;
 dotenv.config();
 
 async function fetchViewerAccount(): Promise<{ screenName: string; userId: string } | null> {
   const url = "https://x.com/i/api/graphql/jMaTSZ5dqXctUg5f97R6xw/Viewer";
 
   const headers = {
-    "authorization": `Bearer ${process.env.BEARER}`,
-    "x-csrf-token": process.env.CSRF_TOKEN as string,
-    "cookie": `auth_token=${process.env.AUTH_TOKEN}; ct0=${process.env.CSRF_TOKEN}`,
+    "authorization": `Bearer ${process.env.TWITTER_BEARER}`,
+    "x-csrf-token": process.env.TWITTER_CSRF_TOKEN as string,
+    "cookie": `auth_token=${process.env.TWITTER_AUTH_TOKEN}; ct0=${process.env.TWITTER_CSRF_TOKEN}`,
   };
 
   const res = await fetch(url, { method: "GET", headers });
@@ -37,19 +37,19 @@ export async function fetchHomeTimeline(
   const url = `https://x.com/i/api/graphql/${queryId}/HomeTimeline`;
 
   // Check required environment variables
-  const requiredTokens = ['BEARER', 'CSRF_TOKEN', 'AUTH_TOKEN'];
+  const requiredTokens = ['TWITTER_BEARER', 'TWITTER_CSRF_TOKEN', 'TWITTER_AUTH_TOKEN'];
   const missing = requiredTokens.filter(k => !process.env[k]);
   if (missing.length) {
     throw new Error(`Missing required tokens: ${missing.join(', ')}`);
   }
 
   // Setup headers with cookies
-  const cookie = `auth_token=${process.env.AUTH_TOKEN};ct0=${process.env.CSRF_TOKEN}`;
+  const cookie = `auth_token=${process.env.TWITTER_AUTH_TOKEN};ct0=${process.env.TWITTER_CSRF_TOKEN}`;
 
   const headers = {
-    "authorization": `Bearer ${process.env.BEARER}`,
+    "authorization": `Bearer ${process.env.TWITTER_BEARER}`,
     "content-type": "application/json",
-    "x-csrf-token": `${process.env.CSRF_TOKEN}`,
+    "x-csrf-token": `${process.env.TWITTER_CSRF_TOKEN}`,
     "cookie": cookie,
   };
 
@@ -172,7 +172,7 @@ async function main() {
     const viewer = await fetchViewerAccount();
     const accountId = viewer?.userId ?? process.env.TWITTER_ACCOUNT_ID;
     if (!accountId) throw new Error('Missing TWITTER_ACCOUNT_ID and Viewer lookup failed.');
-    const usage = await getApiKeyUsage({accountId, platform:'twitter'});
+    const usage = await getApiKeyUsage({ accountId, platform: 'twitter' });
     console.log('Twitter API usage:', {
       total_requests: usage.total_requests,
       last_request: usage.last_request,
