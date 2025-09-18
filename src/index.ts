@@ -4,21 +4,30 @@ import cron from 'node-cron';
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { fetchTelegramMessages } from './fetchTelegramMessages';
-import { getApiKeyUsage } from './utils/redisUtils';
+import { telegramAccountManager, TelegramAccount } from './services/telegramAccountManager';
 
-// Replace these with your values
-const apiId = Number(process.env.TELEGRAM_API_ID);
-const apiHash = process.env.TELEGRAM_API_HASH ?? "";
-if (!Number.isFinite(apiId)) {
-  throw new Error("API_ID environment variable is missing or not a valid number.");
-}
-if (!apiHash) {
-  throw new Error("API_HASH environment variable is not set.");
-}
-const stringSession = new StringSession(process.env.TG_SESSION ?? ""); // use existing session if available
+// Create a map to store clients for each account
+const clientMap = new Map<string, TelegramClient>();
 
-async function startTelegramCron() {
-  console.log("Starting Telegram client...");
+async function createTelegramClient(account: TelegramAccount): Promise<TelegramClient> {
+  // Check if we already have a client for this account
+  if (clientMap.has(account.accountId)) {
+    return clientMap.get(account.accountId)!;
+  }
+
+  console.log(`Creating Telegram client for account: ${account.accountId}`);
+
+  const apiId = Number(account.credentials.TELEGRAM_API_ID);
+  const apiHash = account.credentials.TELEGRAM_API_HASH;
+
+  if (!Number.isFinite(apiId)) {
+    throw new Error(`Invalid API_ID for account ${account.accountId}`);
+  }
+  if (!apiHash) {
+    throw new Error(`API_HASH not set for account ${account.accountId}`);
+  }
+
+  const stringSession = new StringSession(process.env.TG_SESSION ?? ""); // use existing session if available
   const client = new TelegramClient(stringSession, apiId, apiHash, {
     connectionRetries: 5,
   });
@@ -30,37 +39,48 @@ async function startTelegramCron() {
     onError: (err) => console.log(err),
   });
 
-  console.log("Logged in successfully!");
+  console.log(`Logged in successfully for account: ${account.accountId}`);
   if (process.env.PRINT_TG_SESSION === "1") {
     console.log("Your session string:", client.session.save());
-  } else {
-    console.log(
-      "Session created. Set PRINT_TG_SESSION=1 to print it explicitly."
-    );
   }
+
+  // Store the client for reuse
+  clientMap.set(account.accountId, client);
+
+  return client;
+}
+
+async function startTelegramCron() {
+  console.log("Starting Telegram account rotation system...");
 
   // Run once at startup
   try {
-    await fetchTelegramMessages(client, process.env.TELEGRAM_TG_CHANNEL!);
-    // Print Telegram API usage by accountId (not API_ID)
-    const me = await client.getMe();
-    const accountId = String(me.id);
-    const usage = await getApiKeyUsage({ accountId, platform: 'telegram' });
-    console.log('Telegram API usage:', {
-      total_requests: usage.total_requests,
-      last_request: usage.last_request,
-      account_id: usage.account_id
+    const account = await telegramAccountManager.getEarliestUsedAccount();
+    const client = await createTelegramClient(account);
+
+    await fetchTelegramMessages(client, account);
+
+    // Show usage statistics for all accounts
+    const allAccounts = await telegramAccountManager.getAllAccountsUsage();
+    console.log('All Telegram accounts usage:');
+    allAccounts.forEach((acc, index) => {
+      console.log(`  Account ${index + 1} (${acc.accountId}):`);
+      console.log(`    Total requests: ${acc.totalRequests}`);
+      console.log(`    Last used: ${acc.lastUsed || 'Never'}`);
     });
   } catch (err) {
     console.error("Startup Telegram fetch failed:", err);
   }
 
-  // Schedule to run every 5 minutes (no overlap guard)
+  // Schedule to run every 5 minutes with account rotation
   cron.schedule('*/5 * * * *', async () => {
-    console.log('Refetching Telegram messages...');
+    console.log('Refetching Telegram messages with account rotation...');
     try {
-      await fetchTelegramMessages(client, process.env.TELEGRAM_TG_CHANNEL!);
-      // No duplicate print of Telegram API usage
+      const account = await telegramAccountManager.getEarliestUsedAccount();
+      const client = await createTelegramClient(account);
+
+      await fetchTelegramMessages(client, account);
+      console.log(`Fetched messages using account: ${account.accountId}`);
     } catch (err) {
       console.error('Scheduled Telegram fetch failed:', err);
     }
