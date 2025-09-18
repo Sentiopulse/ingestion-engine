@@ -1,9 +1,14 @@
 import { createClient } from 'redis';
-import { decrypt } from '../lib/encryption';
+// Decrypt is dynamically imported only when --decrypt is used.
 
 async function showEnvVariables() {
-    const redisClient = createClient({ url: process.env.REDIS_URL });
+    const redisClient = createClient({ url: process.env.REDIS_URL});
     const decryptFlag = process.argv.includes('--decrypt');
+    let decryptFn: ((v: string) => string) | null = null;
+    if (decryptFlag) {
+        const mod = await import('../lib/encryption');
+        decryptFn = mod.decrypt;
+    }
     await redisClient.connect();
     // Show Twitter accounts
     const twitterRaw = await redisClient.get('twitter-accounts');
@@ -18,7 +23,7 @@ async function showEnvVariables() {
         twitterAccounts.forEach((acc, idx) => {
             console.log(`Account ${idx + 1}:`);
             Object.entries(acc).forEach(([k, v]) => {
-                const shown = decryptFlag ? decrypt(v as string) : mask(v as string);
+                const shown = decryptFlag && decryptFn ? decryptFn(v as string) : mask(v as string);
                 console.log(`  ${k}: ${shown}`);
             });
         });
@@ -39,7 +44,7 @@ async function showEnvVariables() {
         telegramAccounts.forEach((acc, idx) => {
             console.log(`Account ${idx + 1}:`);
             Object.entries(acc).forEach(([k, v]) => {
-                const shown = decryptFlag ? decrypt(v as string) : mask(v as string);
+                const shown = decryptFlag && decryptFn ? decryptFn(v as string) : mask(v as string);
                 console.log(`  ${k}: ${shown}`);
             });
         });
