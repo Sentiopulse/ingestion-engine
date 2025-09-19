@@ -1,8 +1,8 @@
-import { createClient } from 'redis';
+import { BaseAccountManager, BaseAccount } from './BaseAccountManager';
 import { decrypt } from '../lib/encryption';
 import { createHash } from 'crypto';
 
-export interface TwitterAccount {
+export interface TwitterAccount extends BaseAccount {
     accountId: string;
     credentials: {
         TWITTER_AUTH_TOKEN: string;
@@ -13,34 +13,22 @@ export interface TwitterAccount {
     totalRequests?: number;
 }
 
-export class TwitterAccountManager {
-    private redisClient: ReturnType<typeof createClient>;
-    private isConnected = false;
+export class TwitterAccountManager extends BaseAccountManager<TwitterAccount> {
+    protected platform = 'twitter';
+    protected accountKey = 'twitter-accounts';
+    protected usageKeyPrefix = 'twitter_accounts';
 
     constructor(redisUrl?: string) {
-        this.redisClient = createClient({
-            url: redisUrl || process.env.REDIS_URL
-        });
-
-        this.redisClient.on('error', (err) => {
-            console.error('Redis Client Error in TwitterAccountManager:', err);
-        });
-    }
-
-    private async ensureConnected(): Promise<void> {
-        if (!this.isConnected) {
-            await this.redisClient.connect();
-            this.isConnected = true;
-        }
+        super(redisUrl);
     }
 
     /**
      * Fetch all Twitter accounts from Redis and decrypt their credentials
      */
-    private async fetchAllAccounts(): Promise<TwitterAccount[]> {
+    protected async fetchAllAccounts(): Promise<TwitterAccount[]> {
         await this.ensureConnected();
 
-        const raw = await this.redisClient.get('twitter-accounts');
+        const raw = await this.redisClient.get(this.accountKey);
         if (!raw) {
             throw new Error('No Twitter accounts found in Redis');
         }
@@ -91,45 +79,9 @@ export class TwitterAccountManager {
         return accounts;
     }
 
-    /**
-     * Get the Twitter account that was used earliest (least recently used)
-     */
-    async getEarliestUsedAccount(): Promise<TwitterAccount> {
-        const accounts = await this.fetchAllAccounts();
-
-        // Sort accounts by last_request timestamp (earliest first)
-        // Accounts with no last_request (never used) come first
-        accounts.sort((a, b) => {
-            if (!a.lastUsed && !b.lastUsed) return 0;
-            if (!a.lastUsed) return -1; // a comes first (never used)
-            if (!b.lastUsed) return 1;  // b comes first (never used)
-
-            // Both have lastUsed dates, compare them
-            return new Date(a.lastUsed).getTime() - new Date(b.lastUsed).getTime();
-        });
-
-        for (const acc of accounts) {
-            const lockKey = `lock:twitter:${acc.accountId}`;
-            const ok = await this.redisClient.set(lockKey, '1', { NX: true, PX: 15000 });
-            if (ok === 'OK') {
-                console.debug(`[TwitterAccountManager] Selected account=${acc.accountId} lastUsed=${acc.lastUsed ?? 'Never'} totalRequests=${acc.totalRequests ?? 0}`);
-                return acc;
-            }
-        }
-        throw new Error('No available Twitter accounts to claim (all locked).');
-    }
 
     /**
-     * Mark an account as used (updates the tracking in Redis and releases the selection lock)
-     */
-    async markAccountAsUsed(accountId: string): Promise<void> {
-        await this.trackApiKeyUsageLocal(accountId);
-        // Best-effort unlock; lock has TTL as a safety net
-        try { await this.redisClient.del(`lock:twitter:${accountId}`); } catch { }
-    }
-
-    /**
-     * Local usage tracking for Twitter accounts
+     * Local usage read for Twitter accounts (using the same Redis client)
      */
     private async getApiKeyUsageLocal(accountId: string): Promise<{ total_requests: number; last_request: string | null }> {
         await this.ensureConnected();
@@ -141,7 +93,7 @@ export class TwitterAccountManager {
         };
     }
 
-    private async trackApiKeyUsageLocal(accountId: string): Promise<void> {
+    protected async trackApiKeyUsageLocal(accountId: string): Promise<void> {
         await this.ensureConnected();
         const key = `twitter_accounts:${accountId}`;
         const now = new Date().toISOString();
@@ -157,16 +109,6 @@ export class TwitterAccountManager {
      */
     async getAllAccountsUsage(): Promise<TwitterAccount[]> {
         return await this.fetchAllAccounts();
-    }
-
-    /**
-     * Close the Redis connection
-     */
-    async disconnect(): Promise<void> {
-        if (this.isConnected) {
-            await this.redisClient.quit();
-            this.isConnected = false;
-        }
     }
 }
 

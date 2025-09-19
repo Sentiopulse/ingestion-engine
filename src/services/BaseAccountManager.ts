@@ -33,6 +33,7 @@ export abstract class BaseAccountManager<T extends BaseAccount> {
     protected abstract fetchAllAccounts(): Promise<T[]>;
 
     async getEarliestUsedAccount(): Promise<T> {
+        await this.ensureConnected();
         const accounts = await this.fetchAllAccounts();
         accounts.sort((a, b) => {
             if (!a.lastUsed && !b.lastUsed) return 0;
@@ -52,6 +53,7 @@ export abstract class BaseAccountManager<T extends BaseAccount> {
     }
 
     async markAccountAsUsed(accountId: string): Promise<void> {
+        await this.ensureConnected();
         await this.trackApiKeyUsageLocal(accountId);
         try { await this.redisClient.del(`lock:${this.platform}:${accountId}`); } catch { }
     }

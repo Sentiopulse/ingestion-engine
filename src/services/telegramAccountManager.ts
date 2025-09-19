@@ -1,8 +1,8 @@
-import { createClient } from 'redis';
+import { BaseAccountManager, BaseAccount } from './BaseAccountManager';
 import { decrypt } from '../lib/encryption';
 import { getApiKeyUsage, trackApiKeyUsage } from '../utils/redisUtils';
 
-export interface TelegramAccount {
+export interface TelegramAccount extends BaseAccount {
     accountId: string;
     credentials: {
         TELEGRAM_API_ID: string;
@@ -13,34 +13,22 @@ export interface TelegramAccount {
     totalRequests?: number;
 }
 
-export class TelegramAccountManager {
-    private redisClient: ReturnType<typeof createClient>;
-    private isConnected = false;
+export class TelegramAccountManager extends BaseAccountManager<TelegramAccount> {
+    protected platform = 'telegram';
+    protected accountKey = 'telegram-accounts';
+    protected usageKeyPrefix = 'telegram_accounts';
 
     constructor(redisUrl?: string) {
-        this.redisClient = createClient({
-            url: redisUrl || process.env.REDIS_URL || 'redis://localhost:6379'
-        });
-
-        this.redisClient.on('error', (err) => {
-            console.error('Redis Client Error in TelegramAccountManager:', err);
-        });
-    }
-
-    private async ensureConnected(): Promise<void> {
-        if (!this.isConnected) {
-            await this.redisClient.connect();
-            this.isConnected = true;
-        }
+        super(redisUrl);
     }
 
     /**
      * Fetch all Telegram accounts from Redis and decrypt their credentials
      */
-    private async fetchAllAccounts(): Promise<TelegramAccount[]> {
+    protected async fetchAllAccounts(): Promise<TelegramAccount[]> {
         await this.ensureConnected();
 
-        const raw = await this.redisClient.get('telegram-accounts');
+        const raw = await this.redisClient.get(this.accountKey);
         if (!raw) {
             throw new Error('No Telegram accounts found in Redis');
         }
@@ -90,45 +78,11 @@ export class TelegramAccountManager {
         return accounts;
     }
 
-    /**
-     * Get the Telegram account that was used earliest (least recently used)
-     */
-    async getEarliestUsedAccount(): Promise<TelegramAccount> {
-        const accounts = await this.fetchAllAccounts();
-
-        // Sort accounts by last_request timestamp (earliest first)
-        // Accounts with no last_request (never used) come first
-        accounts.sort((a, b) => {
-            if (!a.lastUsed && !b.lastUsed) return 0;
-            if (!a.lastUsed) return -1; // a comes first (never used)
-            if (!b.lastUsed) return 1;  // b comes first (never used)
-
-            // Both have lastUsed dates, compare them
-            return new Date(a.lastUsed).getTime() - new Date(b.lastUsed).getTime();
-        });
-
-        const selectedAccount = accounts[0];
-
-        console.log(`Selected Telegram account: ${selectedAccount.accountId}`);
-        console.log(`Last used: ${selectedAccount.lastUsed || 'Never'}`);
-        console.log(`Total requests: ${selectedAccount.totalRequests || 0}`);
-
-        return selectedAccount;
-    }
-
-    /**
-     * Mark an account as used (updates the tracking in Redis and releases the selection lock)
-     */
-    async markAccountAsUsed(accountId: string): Promise<void> {
-        await this.trackApiKeyUsageLocal(accountId);
-        // Best-effort unlock; lock has TTL as a safety net
-        try { await this.redisClient.del(`lock:telegram:${accountId}`); } catch { }
-    }
 
     /**
      * Local usage tracking for Telegram accounts
      */
-    private async trackApiKeyUsageLocal(accountId: string): Promise<void> {
+    protected async trackApiKeyUsageLocal(accountId: string): Promise<void> {
         await trackApiKeyUsage({ accountId, platform: 'telegram' });
     }
 
@@ -145,16 +99,6 @@ export class TelegramAccountManager {
      */
     async getAllAccountsWithCredentials(): Promise<TelegramAccount[]> {
         return await this.fetchAllAccounts();
-    }
-
-    /**
-     * Close the Redis connection
-     */
-    async disconnect(): Promise<void> {
-        if (this.isConnected) {
-            await this.redisClient.quit();
-            this.isConnected = false;
-        }
     }
 }
 
