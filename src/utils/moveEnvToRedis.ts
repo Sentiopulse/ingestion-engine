@@ -2,6 +2,7 @@ import { encrypt } from '../lib/encryption';
 import { createClient } from 'redis';
 import fs from 'fs';
 import path from 'path';
+import 'dotenv/config';
 
 const redisClient = createClient({ url: process.env.REDIS_URL });
 

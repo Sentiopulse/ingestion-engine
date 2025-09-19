@@ -1,17 +1,16 @@
 import dotenv from 'dotenv';
 import cron from 'node-cron';
-import { getApiKeyUsage } from './utils/redisUtils';
-import { trackApiKeyUsage } from './utils/redisUtils';
-const AUTH_TOKEN = process.env.TWITTER_AUTH_TOKEN;
+import { twitterAccountManager, TwitterAccount } from './services/twitterAccountManager';
+
 dotenv.config();
 
-async function fetchViewerAccount(): Promise<{ screenName: string; userId: string } | null> {
+async function fetchViewerAccount(account: TwitterAccount): Promise<{ screenName: string; userId: string } | null> {
   const url = "https://x.com/i/api/graphql/jMaTSZ5dqXctUg5f97R6xw/Viewer";
 
   const headers = {
-    "authorization": `Bearer ${process.env.TWITTER_BEARER}`,
-    "x-csrf-token": process.env.TWITTER_CSRF_TOKEN as string,
-    "cookie": `auth_token=${process.env.TWITTER_AUTH_TOKEN}; ct0=${process.env.TWITTER_CSRF_TOKEN}`,
+    "authorization": `Bearer ${account.credentials.TWITTER_BEARER}`,
+    "x-csrf-token": account.credentials.TWITTER_CSRF_TOKEN,
+    "cookie": `auth_token=${account.credentials.TWITTER_AUTH_TOKEN}; ct0=${account.credentials.TWITTER_CSRF_TOKEN}`,
   };
 
   const res = await fetch(url, { method: "GET", headers });
@@ -31,25 +30,24 @@ async function fetchViewerAccount(): Promise<{ screenName: string; userId: strin
 }
 
 export async function fetchHomeTimeline(
-  seenTweetIds: string[] = []
+  seenTweetIds: string[] = [],
+  providedAccount?: TwitterAccount
 ): Promise<Array<{ id: string; content: string; authorId: string }>> {
   const queryId = "wEpbv0WrfwV6y2Wlf0fxBQ";
   const url = `https://x.com/i/api/graphql/${queryId}/HomeTimeline`;
 
-  // Check required environment variables
-  const requiredTokens = ['TWITTER_BEARER', 'TWITTER_CSRF_TOKEN', 'TWITTER_AUTH_TOKEN'];
-  const missing = requiredTokens.filter(k => !process.env[k]);
-  if (missing.length) {
-    throw new Error(`Missing required tokens: ${missing.join(', ')}`);
-  }
+  // Get the account to use (either provided or fetch the earliest used one)
+  const account = providedAccount || await twitterAccountManager.getEarliestUsedAccount();
 
-  // Setup headers with cookies
-  const cookie = `auth_token=${process.env.TWITTER_AUTH_TOKEN};ct0=${process.env.TWITTER_CSRF_TOKEN}`;
+  console.log(`Using Twitter account: ${account.accountId} for timeline fetch`);
+
+  // Setup headers with the account's credentials
+  const cookie = `auth_token=${account.credentials.TWITTER_AUTH_TOKEN};ct0=${account.credentials.TWITTER_CSRF_TOKEN}`;
 
   const headers = {
-    "authorization": `Bearer ${process.env.TWITTER_BEARER}`,
+    "authorization": `Bearer ${account.credentials.TWITTER_BEARER}`,
     "content-type": "application/json",
-    "x-csrf-token": `${process.env.TWITTER_CSRF_TOKEN}`,
+    "x-csrf-token": account.credentials.TWITTER_CSRF_TOKEN,
     "cookie": cookie,
   };
 
@@ -154,29 +152,33 @@ export async function fetchHomeTimeline(
   }
 
   // Track API usage after successful fetch
-  if (process.env.TWITTER_ID) {
-    const accountId = process.env.TWITTER_ID;
-    console.log("Authenticated account:", accountId);
-    await trackApiKeyUsage({ accountId, platform: 'twitter' });
-  }
+  await twitterAccountManager.markAccountAsUsed(account.accountId);
 
   return tweets;
 }
 
 // Test runner - when file is executed directly
 async function main() {
-  console.log('Starting fetchHomeTimeline...');
+  console.log('Starting fetchHomeTimeline with account rotation...');
   try {
-    const data = await fetchHomeTimeline();
+    // Get the earliest used account
+    const account = await twitterAccountManager.getEarliestUsedAccount();
 
-    const viewer = await fetchViewerAccount();
-    const accountId = viewer?.userId ?? process.env.TWITTER_ACCOUNT_ID;
-    if (!accountId) throw new Error('Missing TWITTER_ACCOUNT_ID and Viewer lookup failed.');
-    const usage = await getApiKeyUsage({ accountId, platform: 'twitter' });
-    console.log('Twitter API usage:', {
-      total_requests: usage.total_requests,
-      last_request: usage.last_request,
-      account_id: usage.account_id
+    // Fetch timeline data
+    const data = await fetchHomeTimeline([], account);
+    console.log(`Fetched ${data.length} tweets using account: ${account.accountId}`);
+
+    // Get viewer info for the account
+    const viewer = await fetchViewerAccount(account);
+    console.log('Account info:', viewer);
+
+    // Show usage statistics for all accounts
+    const allAccounts = await twitterAccountManager.getAllAccountsUsage();
+    console.log('All Twitter accounts usage:');
+    allAccounts.forEach((acc, index) => {
+      console.log(`  Account ${index + 1} (${acc.accountId}):`);
+      console.log(`    Total requests: ${acc.totalRequests}`);
+      console.log(`    Last used: ${acc.lastUsed || 'Never'}`);
     });
   } catch (err) {
     console.error('fetchHomeTimeline failed:', err instanceof Error ? err.message : err);
@@ -187,12 +189,12 @@ async function main() {
 // Run once at startup
 main();
 
-// Schedule to run every 5 minutes
+// Schedule to run every 5 minutes - automatically rotates to earliest used account
 cron.schedule('*/5 * * * *', async () => {
-  console.log('Refetching Twitter timeline...');
+  console.log('Refetching Twitter timeline with account rotation...');
   try {
     const timeline = await fetchHomeTimeline();
-    console.log('Fetched timeline:', timeline);
+    console.log(`Fetched ${timeline.length} tweets`);
   } catch (err) {
     console.error('Scheduled Twitter timeline fetch failed:', err);
   }

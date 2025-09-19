@@ -87,4 +87,47 @@ export async function getApiKeyUsage(data: dataType): Promise<{ total_requests: 
   return result;
 }
 
+/**
+ * Get API usage stats for multiple accounts in batch
+ * @param accountIds Array of account IDs to query
+ * @param platform The platform ('telegram' or 'twitter')
+ * @returns Array of usage objects with account IDs
+ */
+export async function getBatchApiKeyUsage(
+  accountIds: string[],
+  platform: 'telegram' | 'twitter'
+): Promise<Array<{ accountId: string; total_requests: number; last_request: string | null }>> {
+  if (platform !== 'twitter' && platform !== 'telegram') {
+    throw new Error('getBatchApiKeyUsage: platform must be "twitter" or "telegram"');
+  }
+
+  const results: Array<{ accountId: string; total_requests: number; last_request: string | null }> = [];
+
+  try {
+    await ensureRedisConnected();
+
+    for (const accountId of accountIds) {
+      if (!accountId?.trim()) continue;
+
+      let key: string;
+      if (platform === 'twitter') {
+        key = `twitter_accounts:${accountId}`;
+      } else {
+        key = `telegram_accounts:${accountId}`;
+      }
+
+      const data = await redisClient.hGetAll(key);
+      results.push({
+        accountId,
+        total_requests: data.total_requests ? parseInt(data.total_requests) : 0,
+        last_request: data.last_request ? data.last_request : null,
+      });
+    }
+  } catch (err) {
+    console.error('getBatchApiKeyUsage: Redis operation failed:', err);
+  }
+
+  return results;
+}
+
 

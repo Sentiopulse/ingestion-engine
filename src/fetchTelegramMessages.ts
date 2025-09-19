@@ -1,16 +1,21 @@
 import { Api, TelegramClient } from "telegram";
 import { trackApiKeyUsage } from './utils/redisUtils';
+import { TelegramAccount } from './services/telegramAccountManager';
 
 export type TelegramMessages = { id: string; content: string; channelId: string };
 
 export async function fetchTelegramMessages(
   client: TelegramClient,
-  channel: string
+  account: TelegramAccount
 ): Promise<TelegramMessages[]> {
+  const channel = account.credentials.TELEGRAM_TG_CHANNEL;
   if (!channel) {
-    throw new Error("TELEGRAM_TG_CHANNEL environment variable is not set.");
+    throw new Error("TELEGRAM_TG_CHANNEL is not set in account credentials.");
   }
-  const apiId = process.env.TELEGRAM_API_ID;
+
+  if (process.env.DEBUG_TELEGRAM === '1') {
+    console.log(`Using Telegram account: ${account.accountId} for channel: ${channel}`);
+  }
 
   // Fetch channel entity to get the actual channel ID
   let entity: Api.Channel;
@@ -52,21 +57,6 @@ export async function fetchTelegramMessages(
     console.log("No messages property found in response:", messages);
   }
 
-  // Track API usage after successful fetch
-  if (apiId) {
-    let accountId: string;
-    try {
-      const me = await client.getMe();
-      if (me && me.id) {
-        accountId = String(me.id);
-      } else {
-        throw new Error('Unable to determine Telegram account ID');
-      }
-    } catch (e) {
-      throw new Error('Unable to determine Telegram account ID');
-    }
-    await trackApiKeyUsage({ accountId, platform: 'telegram' });
-  }
 
   return out;
 }
