@@ -1,6 +1,4 @@
-
-import fetch from 'node-fetch';
-import { URLSearchParams } from 'url';
+// Use global fetch and URLSearchParams (Node 18+)
 import { createClient } from 'redis';
 import { decrypt } from './lib/encryption';
 
@@ -15,9 +13,14 @@ export interface TwitterAuthOptions {
  */
 export async function getLatestTwitterCredentialsFromRedis(redisUrl?: string): Promise<TwitterAuthOptions> {
     const client = createClient({ url: redisUrl || process.env.REDIS_URL });
-    await client.connect();
-    const raw = await client.get('twitter-accounts');
-    await client.quit();
+    let raw: string | null = null;
+    try {
+        await client.connect();
+        raw = await client.get('twitter-accounts');
+    } finally {
+        // Best-effort close
+        try { await client.quit(); } catch { /* ignore */ }
+    }
     if (!raw) throw new Error('No twitter-accounts found in Redis');
     let arr: any[];
     try {
@@ -68,16 +71,23 @@ export async function followUser(
         user_id: userId
     });
 
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 10_000);
     const res = await fetch(url, {
         method: 'POST',
         headers: {
             'authorization': `Bearer ${creds.bearerToken}`,
             'cookie': creds.cookie,
             'x-csrf-token': creds.csrfToken,
-            'content-type': 'application/x-www-form-urlencoded'
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://x.com',
+            'referer': 'https://x.com/',
+            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36'
         },
-        body: params
+        body: params,
+        signal: ac.signal
     });
+    clearTimeout(t);
 
     if (!res.ok) {
         const error = await res.text();
