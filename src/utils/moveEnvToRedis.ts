@@ -21,7 +21,7 @@ async function moveEnvToRedis() {
     }
     await ensureRedisConnected();
     // Define which keys belong to which service
-    const twitterKeys = ['TWITTER_AUTH_TOKEN', 'TWITTER_BEARER', 'TWITTER_CSRF_TOKEN'];
+    const twitterKeys = ['TWITTER_AUTH_TOKEN', 'TWITTER_BEARER', 'TWITTER_CSRF_TOKEN', 'TWITTER_COOKIE'];
     const telegramKeys = ['TELEGRAM_API_ID', 'TELEGRAM_API_HASH', 'TELEGRAM_TG_CHANNEL'];
 
     // Encrypt each value individually and store as an object
