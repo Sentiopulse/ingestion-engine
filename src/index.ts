@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import input from "input"; // interactive input for login
+import input from 'input'; // interactive input for login
 import cron from 'node-cron';
-import { TelegramClient } from "telegram";
-import { StringSession } from "telegram/sessions";
+import { TelegramClient } from 'telegram';
+import { StringSession } from 'telegram/sessions';
 import { fetchTelegramMessages } from './fetchTelegramMessages';
 import { telegramAccountManager, TelegramAccount } from './services/telegramAccountManager';
 
@@ -34,24 +34,26 @@ async function createTelegramClient(account: TelegramAccount): Promise<TelegramC
   let sessionStr = await redisClient.get(sessionKey);
   const isInteractive = Boolean(process.stdin.isTTY);
   if (!sessionStr && !isInteractive) {
-    throw new Error(`Missing session in Redis for ${account.accountId} (key: ${sessionKey}). Generate and store a session string before running cron.`);
+    throw new Error(
+      `Missing session in Redis for ${account.accountId} (key: ${sessionKey}). Generate and store a session string before running cron.`
+    );
   }
-  sessionStr = sessionStr || "";
+  sessionStr = sessionStr || '';
   const stringSession = new StringSession(sessionStr);
   const client = new TelegramClient(stringSession, apiId, apiHash, {
-    connectionRetries: 5,
+    connectionRetries: 5
   });
 
   await client.start({
-    phoneNumber: async () => await input.text("Enter your phone number: "),
-    password: async () => await input.text("Enter 2FA password (if enabled): "),
-    phoneCode: async () => await input.text("Enter code you received: "),
-    onError: (err) => console.log(err),
+    phoneNumber: async () => await input.text('Enter your phone number: '),
+    password: async () => await input.text('Enter 2FA password (if enabled): '),
+    phoneCode: async () => await input.text('Enter code you received: '),
+    onError: (err) => console.log(err)
   });
 
   console.log(`Logged in successfully for account: ${account.accountId}`);
   const saved = client.session.save();
-  if (process.env.PRINT_TG_SESSION === "1" && isInteractive) {
+  if (process.env.PRINT_TG_SESSION === '1' && isInteractive) {
     // Emit an export-ready line deliberately, instead of dumping secrets in logs
     console.log(`export ${sessionKey}="${saved}"`);
   }
@@ -63,7 +65,7 @@ async function createTelegramClient(account: TelegramAccount): Promise<TelegramC
 }
 
 async function startTelegramCron() {
-  console.log("Starting Telegram account rotation system...");
+  console.log('Starting Telegram account rotation system...');
 
   // Run once at startup
   try {
@@ -81,7 +83,7 @@ async function startTelegramCron() {
       console.log(`    Last used: ${acc.lastUsed || 'Never'}`);
     });
   } catch (err) {
-    console.error("Startup Telegram fetch failed:", err);
+    console.error('Startup Telegram fetch failed:', err);
   }
 
   // Schedule to run every 5 minutes with account rotation
@@ -102,9 +104,5 @@ async function startTelegramCron() {
 }
 
 startTelegramCron().catch((err) => {
-  console.error("Failed to start Telegram cron:", err);
+  console.error('Failed to start Telegram cron:', err);
 });
-
-
-
-

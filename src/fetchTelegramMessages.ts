@@ -1,4 +1,4 @@
-import { Api, TelegramClient } from "telegram";
+import { Api, TelegramClient } from 'telegram';
 import { trackApiKeyUsage } from './utils/redisUtils';
 import { TelegramAccount } from './services/telegramAccountManager';
 
@@ -10,7 +10,7 @@ export async function fetchTelegramMessages(
 ): Promise<TelegramMessages[]> {
   const channel = account.credentials.TELEGRAM_TG_CHANNEL;
   if (!channel) {
-    throw new Error("TELEGRAM_TG_CHANNEL is not set in account credentials.");
+    throw new Error('TELEGRAM_TG_CHANNEL is not set in account credentials.');
   }
 
   if (process.env.DEBUG_TELEGRAM === '1') {
@@ -38,13 +38,13 @@ export async function fetchTelegramMessages(
   const messages = await client.invoke(
     new Api.messages.GetHistory({
       peer: entity,
-      limit: 10,
+      limit: 10
     })
   );
 
   const out: TelegramMessages[] = [];
 
-  if ("messages" in messages) {
+  if ('messages' in messages) {
     for (const msg of messages.messages as any[]) {
       const id = typeof msg?.id === 'number' || typeof msg?.id === 'string' ? String(msg.id) : null;
       const content = typeof msg?.message === 'string' ? msg.message : '';
@@ -54,9 +54,8 @@ export async function fetchTelegramMessages(
       console.log(formatted);
     }
   } else {
-    console.log("No messages property found in response:", messages);
+    console.log('No messages property found in response:', messages);
   }
-
 
   return out;
 }

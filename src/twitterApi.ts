@@ -5,17 +5,17 @@ import { twitterAccountManager, TwitterAccount } from './services/twitterAccount
 dotenv.config();
 
 async function fetchViewerAccount(account: TwitterAccount): Promise<{ screenName: string; userId: string } | null> {
-  const url = "https://x.com/i/api/graphql/jMaTSZ5dqXctUg5f97R6xw/Viewer";
+  const url = 'https://x.com/i/api/graphql/jMaTSZ5dqXctUg5f97R6xw/Viewer';
 
   const headers = {
-    "authorization": `Bearer ${account.credentials.TWITTER_BEARER}`,
-    "x-csrf-token": account.credentials.TWITTER_CSRF_TOKEN,
-    "cookie": `auth_token=${account.credentials.TWITTER_AUTH_TOKEN}; ct0=${account.credentials.TWITTER_CSRF_TOKEN}`,
+    authorization: `Bearer ${account.credentials.TWITTER_BEARER}`,
+    'x-csrf-token': account.credentials.TWITTER_CSRF_TOKEN,
+    cookie: `auth_token=${account.credentials.TWITTER_AUTH_TOKEN}; ct0=${account.credentials.TWITTER_CSRF_TOKEN}`
   };
 
-  const res = await fetch(url, { method: "GET", headers });
+  const res = await fetch(url, { method: 'GET', headers });
   if (!res.ok) {
-    console.error("Viewer API request failed:", res.status, res.statusText);
+    console.error('Viewer API request failed:', res.status, res.statusText);
     return null;
   }
 
@@ -25,7 +25,7 @@ async function fetchViewerAccount(account: TwitterAccount): Promise<{ screenName
 
   return {
     screenName: user.legacy?.screen_name,
-    userId: user.rest_id,
+    userId: user.rest_id
   };
 }
 
@@ -33,11 +33,11 @@ export async function fetchHomeTimeline(
   seenTweetIds: string[] = [],
   providedAccount?: TwitterAccount
 ): Promise<Array<{ id: string; content: string; authorId: string }>> {
-  const queryId = "wEpbv0WrfwV6y2Wlf0fxBQ";
+  const queryId = 'wEpbv0WrfwV6y2Wlf0fxBQ';
   const url = `https://x.com/i/api/graphql/${queryId}/HomeTimeline`;
 
   // Get the account to use (either provided or fetch the earliest used one)
-  const account = providedAccount || await twitterAccountManager.getEarliestUsedAccount();
+  const account = providedAccount || (await twitterAccountManager.getEarliestUsedAccount());
 
   console.log(`Using Twitter account: ${account.accountId} for timeline fetch`);
 
@@ -45,10 +45,10 @@ export async function fetchHomeTimeline(
   const cookie = `auth_token=${account.credentials.TWITTER_AUTH_TOKEN};ct0=${account.credentials.TWITTER_CSRF_TOKEN}`;
 
   const headers = {
-    "authorization": `Bearer ${account.credentials.TWITTER_BEARER}`,
-    "content-type": "application/json",
-    "x-csrf-token": account.credentials.TWITTER_CSRF_TOKEN,
-    "cookie": cookie,
+    authorization: `Bearer ${account.credentials.TWITTER_BEARER}`,
+    'content-type': 'application/json',
+    'x-csrf-token': account.credentials.TWITTER_CSRF_TOKEN,
+    cookie: cookie
   };
 
   // Prepare request body
@@ -57,9 +57,9 @@ export async function fetchHomeTimeline(
       count: 20,
       includePromotedContent: true,
       latestControlAvailable: true,
-      requestContext: "launch",
+      requestContext: 'launch',
       withCommunity: true,
-      seenTweetIds: seenTweetIds || [],
+      seenTweetIds: seenTweetIds || []
     },
     features: {
       rweb_video_screen_enabled: false,
@@ -96,16 +96,16 @@ export async function fetchHomeTimeline(
       responsive_web_grok_image_annotation_enabled: true,
       responsive_web_grok_imagine_annotation_enabled: true,
       responsive_web_grok_community_note_auto_translation_is_enabled: false,
-      responsive_web_enhance_cards_enabled: false,
+      responsive_web_enhance_cards_enabled: false
     },
-    queryId,
+    queryId
   };
 
   // Make API request
   const response = await fetch(url, {
-    method: "POST",
+    method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   });
 
   // Check response status
@@ -138,8 +138,7 @@ export async function fetchHomeTimeline(
         const base = result?.__typename === 'TweetWithVisibilityResults' ? result?.tweet : result;
         const restId: string | undefined = base?.rest_id;
         const fullText: string | undefined =
-          base?.legacy?.full_text ??
-          base?.note_tweet?.note_tweet_results?.result?.text;
+          base?.legacy?.full_text ?? base?.note_tweet?.note_tweet_results?.result?.text;
         const authorId: string | undefined = base?.core?.user_results?.result?.rest_id;
         if (!restId || !fullText || !authorId) continue;
         if (seenTweetIdsSet.has(restId)) continue;
@@ -148,7 +147,7 @@ export async function fetchHomeTimeline(
       }
     }
   } catch (e) {
-    console.error("Error parsing tweets:", e);
+    console.error('Error parsing tweets:', e);
   }
 
   // Track API usage after successful fetch
