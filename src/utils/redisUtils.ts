@@ -15,7 +15,13 @@ async function ensureRedisConnected() {
     redisConnected = true;
   }
 }
-export async function trackApiKeyUsage({ accountId, platform }: { accountId: string, platform: 'telegram' | 'twitter' }): Promise<void> {
+export async function trackApiKeyUsage({
+  accountId,
+  platform
+}: {
+  accountId: string;
+  platform: 'telegram' | 'twitter';
+}): Promise<void> {
   if (!accountId?.trim()) {
     console.warn('trackApiKeyUsage: empty accountId; skipping');
     return;
@@ -37,7 +43,7 @@ export async function trackApiKeyUsage({ accountId, platform }: { accountId: str
       .hIncrBy(key, 'total_requests', 1)
       .hSet(key, {
         last_request: now,
-        account_id: accountId,
+        account_id: accountId
       })
       .exec();
   } catch (err) {
@@ -53,13 +59,18 @@ export async function trackApiKeyUsage({ accountId, platform }: { accountId: str
  */
 
 interface dataType {
-  accountId: string,
-  platform: 'telegram' | 'twitter'
+  accountId: string;
+  platform: 'telegram' | 'twitter';
 }
 
-export async function getApiKeyUsage(data: dataType): Promise<{ total_requests: number; last_request: string | null; account_id?: string }> {
+export async function getApiKeyUsage(
+  data: dataType
+): Promise<{ total_requests: number; last_request: string | null; account_id?: string }> {
   const { accountId, platform } = data;
-  let result: { total_requests: number; last_request: string | null; account_id?: string } = { total_requests: 0, last_request: null };
+  let result: { total_requests: number; last_request: string | null; account_id?: string } = {
+    total_requests: 0,
+    last_request: null
+  };
   if (!accountId?.trim()) {
     return result;
   }
@@ -120,7 +131,7 @@ export async function getBatchApiKeyUsage(
       results.push({
         accountId,
         total_requests: data.total_requests ? parseInt(data.total_requests) : 0,
-        last_request: data.last_request ? data.last_request : null,
+        last_request: data.last_request ? data.last_request : null
       });
     }
   } catch (err) {
@@ -129,5 +140,3 @@ export async function getBatchApiKeyUsage(
 
   return results;
 }
-
-
