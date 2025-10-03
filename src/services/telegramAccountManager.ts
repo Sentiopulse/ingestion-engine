@@ -58,6 +58,9 @@ export class TelegramAccountManager extends BaseAccountManager<TelegramAccount> 
 
         // Get usage statistics from Redis
         const usage = await getApiKeyUsage({ accountId, platform: 'telegram' });
+      } catch (err) {
+        console.error(`Failed to decrypt Telegram account at index ${i}:`, err);
+        continue;
 
         accounts.push({
           accountId,

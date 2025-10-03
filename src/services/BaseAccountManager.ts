@@ -32,6 +32,10 @@ export abstract class BaseAccountManager<T extends BaseAccount> {
 
   protected abstract fetchAllAccounts(): Promise<T[]>;
 
+  /**
+   * Returns the account that was used the earliest (or never used), and locks it for use.
+   * Throws if all accounts are locked or unavailable.
+   */
   async getEarliestUsedAccount(): Promise<T> {
     await this.ensureConnected();
     const accounts = await this.fetchAllAccounts();

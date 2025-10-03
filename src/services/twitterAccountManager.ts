@@ -12,7 +12,9 @@ export interface TwitterAccount extends BaseAccount {
   lastUsed?: string;
   totalRequests?: number;
 }
-
+/**
+ * Manages Twitter accounts stored in Redis, including decryption and usage tracking.
+ */
 export class TwitterAccountManager extends BaseAccountManager<TwitterAccount> {
   protected platform = 'twitter';
   protected accountKey = 'twitter-accounts';
