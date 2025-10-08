@@ -2,15 +2,12 @@ import { BaseAccountManager, BaseAccount } from './BaseAccountManager';
 import { decrypt } from '../lib/encryption';
 
 export interface RedditAccount extends BaseAccount {
-  accountId: string;
   credentials: {
     REDDIT_CLIENT_ID: string;
     REDDIT_CLIENT_SECRET: string;
     REDDIT_REFRESH_TOKEN: string;
     REDDIT_USERNAME: string;
   };
-  lastUsed?: string;
-  totalRequests?: number;
 }
 
 /**
@@ -87,9 +84,7 @@ export class RedditAccountManager extends BaseAccountManager<RedditAccount> {
    */
   private async getApiKeyUsageLocal(
     accountId: string
-  ): Promise<{ total_requests: number; last_request: string | null }> {
-    await this.ensureConnected();
-    const key = `reddit_accounts:${accountId}`;
+    const key = `${this.usageKeyPrefix}:${accountId}`;
     const data = await this.redisClient.hGetAll(key);
     return {
       total_requests: data?.total_requests ? parseInt(data.total_requests, 10) : 0,
@@ -99,7 +94,7 @@ export class RedditAccountManager extends BaseAccountManager<RedditAccount> {
 
   protected async trackApiKeyUsageLocal(accountId: string): Promise<void> {
     await this.ensureConnected();
-    const key = `reddit_accounts:${accountId}`;
+    const key = `${this.usageKeyPrefix}:${accountId}`;
     const now = new Date().toISOString();
     await this.redisClient
       .multi()
