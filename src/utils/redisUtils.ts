@@ -5,15 +5,40 @@ import { createClient } from 'redis';
 const redisClient = createClient({ url: 'redis://localhost:6379' });
 let redisConnected = false;
 
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 1000; // 1 second
+
 redisClient.on('error', (err) => {
-  console.error('Redis Client Error', err);
+  console.error('Redis Client Error:', err);
+  redisConnected = false; // Reset connection status on error
 });
 
 async function ensureRedisConnected() {
-  if (!redisConnected) {
-    await redisClient.connect();
-    redisConnected = true;
+  if (redisConnected) {
+    return;
   }
+
+  let retries = 0;
+  while (retries < MAX_RETRIES) {
+    try {
+      await redisClient.connect();
+      redisConnected = true;
+      console.log('Successfully connected to Redis.');
+      return;
+    } catch (err) {
+      retries++;
+      console.warn(
+        `Failed to connect to Redis (attempt ${retries}/${MAX_RETRIES}). Retrying in ${
+          RETRY_DELAY_MS * Math.pow(2, retries - 1)
+        }ms...`,
+        err
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, retries - 1))
+      );
+    }
+  }
+  throw new Error('Failed to connect to Redis after multiple retries.');
 }
 export async function trackApiKeyUsage({
   accountId,
