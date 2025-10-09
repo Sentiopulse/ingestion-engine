@@ -3,7 +3,7 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   transform: {
-    '^.+\.ts?$': 'babel-jest',
+    '^.+\.ts?$': ['babel-jest', { configFile: './babel.config.js' }],
   },
   testRegex: '(/__tests__/.*|(\\.|/)(test|spec))\.ts?$',
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
