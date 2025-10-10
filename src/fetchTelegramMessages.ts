@@ -1,12 +1,12 @@
 import { Api, TelegramClient } from 'telegram';
 import { trackApiKeyUsage } from './utils/redisUtils';
-import { TelegramAccount } from './services/telegramAccountManager';
+import { ITelegramAccount } from './types/input.d';
 
 export type TelegramMessages = { id: string; content: string; channelId: string };
 
 export async function fetchTelegramMessages(
   client: TelegramClient,
-  account: TelegramAccount
+  account: ITelegramAccount
 ): Promise<TelegramMessages[]> {
   const channel = account.credentials.TELEGRAM_TG_CHANNEL;
   if (!channel) {

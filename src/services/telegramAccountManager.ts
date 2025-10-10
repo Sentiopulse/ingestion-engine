@@ -1,19 +1,9 @@
 import { BaseAccountManager, BaseAccount } from './BaseAccountManager';
 import { decrypt } from '../lib/encryption';
 import { getApiKeyUsage, trackApiKeyUsage } from '../utils/redisUtils';
+import { ITelegramAccount, ITelegramCredentials } from '../types/input.d';
 
-export interface TelegramAccount extends BaseAccount {
-  accountId: string;
-  credentials: {
-    TELEGRAM_API_ID: string;
-    TELEGRAM_API_HASH: string;
-    TELEGRAM_TG_CHANNEL: string;
-  };
-  lastUsed?: string;
-  totalRequests?: number;
-}
-
-export class TelegramAccountManager extends BaseAccountManager<TelegramAccount> {
+export class TelegramAccountManager extends BaseAccountManager<ITelegramAccount> {
   protected platform = 'telegram';
   protected accountKey = 'telegram-accounts';
   protected usageKeyPrefix = 'telegram_accounts';
@@ -46,8 +36,7 @@ export class TelegramAccountManager extends BaseAccountManager<TelegramAccount> 
       const encryptedAccount = encryptedAccounts[i];
 
       try {
-        // Decrypt credentials
-        const credentials = {
+        const credentials: ITelegramCredentials = {
           TELEGRAM_API_ID: decrypt(encryptedAccount.TELEGRAM_API_ID),
           TELEGRAM_API_HASH: decrypt(encryptedAccount.TELEGRAM_API_HASH),
           TELEGRAM_TG_CHANNEL: decrypt(encryptedAccount.TELEGRAM_TG_CHANNEL)
@@ -58,9 +47,6 @@ export class TelegramAccountManager extends BaseAccountManager<TelegramAccount> 
 
         // Get usage statistics from Redis
         const usage = await getApiKeyUsage({ accountId, platform: 'telegram' });
-      } catch (err) {
-        console.error(`Failed to decrypt Telegram account at index ${i}:`, err);
-        continue;
 
         accounts.push({
           accountId,
@@ -68,8 +54,8 @@ export class TelegramAccountManager extends BaseAccountManager<TelegramAccount> 
           lastUsed: usage.last_request || undefined,
           totalRequests: usage.total_requests
         });
-      } catch (e) {
-        console.warn(`Failed to decrypt Telegram account ${i + 1}:`, e);
+      } catch (err) {
+        console.error(`Failed to decrypt Telegram account at index ${i}:`, err);
         continue;
       }
     }
