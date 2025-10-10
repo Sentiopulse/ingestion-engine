@@ -1,3 +1,48 @@
+/**
+ * @file fetchTelegramMessages.ts
+ * @description Fetches messages from a specified Telegram channel.
+ *
+ * @example
+ * // To run this function, you would typically have a TelegramClient instance
+ * // and an ITelegramAccount object.
+ * //
+ * // Example usage (assuming client and account are already initialized):
+ * // import { TelegramClient } from 'telegram';
+ * // import { ITelegramAccount } from './types/input.d';
+ * // import { fetchTelegramMessages } from './fetchTelegramMessages';
+ * //
+ * // async function main() {
+ * //   const client = new TelegramClient(...); // Initialize your TelegramClient
+ * //   const account: ITelegramAccount = {
+ * //     accountId: 'test_account',
+ * //     credentials: {
+ * //       TELEGRAM_APP_ID: 'YOUR_APP_ID',
+ * //       TELEGRAM_API_HASH: 'YOUR_API_HASH',
+ * //       TELEGRAM_SESSION: 'YOUR_SESSION_STRING',
+ * //       TELEGRAM_TG_CHANNEL: 'YOUR_CHANNEL_NAME_OR_ID',
+ * //     },
+ * //     platform: 'telegram',
+ * //     isEnabled: true,
+ * //     rotation: {
+ * //       lastRotated: 0,
+ * //       rotationInterval: 0,
+ * //       rotationCounter: 0,
+ * //     },
+ * //   };
+ * //
+ * //   try {
+ * //     const messages = await fetchTelegramMessages(client, account);
+ * //     console.log('Fetched Telegram messages:', messages);
+ * //   } catch (error) {
+ * //     console.error('Error fetching Telegram messages:', error);
+ * //   } finally {
+ * //     await client.disconnect();
+ * //   }
+ * // }
+ * //
+ * // main().catch(console.error);
+ */
+
 import { Api, TelegramClient } from 'telegram';
 import { trackApiKeyUsage } from './utils/redisUtils';
 import { ITelegramAccount } from './types/input.d';

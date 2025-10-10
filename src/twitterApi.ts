@@ -1,3 +1,40 @@
+/**
+ * @file twitterApi.ts
+ * @description Provides functions to interact with the Twitter API, including fetching home timeline and viewer account information.
+ *              It also manages Twitter accounts with rotation logic.
+ *
+ * @example
+ * // To use these functions, ensure your environment variables or Redis contain
+ * // the necessary Twitter API credentials (TWITTER_BEARER, TWITTER_CSRF_TOKEN, TWITTER_AUTH_TOKEN).
+ * // The `twitterAccountManager` handles account rotation automatically.
+ * //
+ * // import { fetchHomeTimeline, fetchViewerAccount } from './twitterApi';
+ * // import { twitterAccountManager } from './services/twitterAccountManager';
+ * //
+ * // async function runTwitterFetches() {
+ * //   console.log('Fetching Twitter home timeline...');
+ * //   try {
+ * //     // Fetch the home timeline using an automatically rotated account
+ * //     const timeline = await fetchHomeTimeline();
+ * //     console.log(`Fetched ${timeline.length} tweets.`);
+ * //     if (timeline.length > 0) {
+ * //       console.log('First tweet:', timeline[0]);
+ * //     }
+ * //
+ * //     // Get the currently active account to fetch viewer info
+ * //     const activeAccount = await twitterAccountManager.getEarliestUsedAccount();
+ * //     if (activeAccount) {
+ * //       const viewerInfo = await fetchViewerAccount(activeAccount);
+ * //       console.log('Viewer account info:', viewerInfo);
+ * //     }
+ * //   } catch (error) {
+ * //     console.error('Error during Twitter API operations:', error);
+ * //   }
+ * // }
+ * //
+ * // runTwitterFetches().catch(console.error);
+ */
+
 import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { twitterAccountManager, TwitterAccount } from './services/twitterAccountManager';

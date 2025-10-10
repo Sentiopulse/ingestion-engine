@@ -1,3 +1,26 @@
+/**
+ * @file index.ts
+ * @description Main entry point for the Telegram ingestion engine. This file initializes Telegram clients,
+ *              manages account rotation, fetches messages, and schedules these operations using cron.
+ *
+ * @example
+ * // To run this ingestion engine:
+ * // 1. Ensure you have Node.js and npm installed.
+ * // 2. Install dependencies: `npm install`
+ * // 3. Set up your Telegram account credentials in Redis or as environment variables.
+ * //    For interactive session generation, run:
+ * //    `npm run start` (and follow the prompts for phone number, 2FA, etc.)
+ * //    The session string will be printed to the console, which you should then save to Redis.
+ * // 4. To start the ingestion process with cron scheduling, run:
+ * //    `npm run start`
+ * //
+ * // Required environment variables (or Redis keys):
+ * // - TELEGRAM_API_ID: Your Telegram API ID
+ * // - TELEGRAM_API_HASH: Your Telegram API Hash
+ * // - TELEGRAM_TG_CHANNEL: The Telegram channel name or ID to fetch messages from
+ * // - TELEGRAM_SESSION:<accountId>: The session string for a specific account (stored in Redis)
+ */
+
 import 'dotenv/config';
 import input from 'input'; // interactive input for login
 import cron from 'node-cron';
